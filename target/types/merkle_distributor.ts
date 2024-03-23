@@ -599,6 +599,13 @@ export type MerkleDistributor = {
             "type": "u64"
           },
           {
+            "name": "unlockedAmountClaimed",
+            "docs": [
+              "Unlocked amount claimed"
+            ],
+            "type": "u64"
+          },
+          {
             "name": "closable",
             "docs": [
               "indicate that whether admin can close this account, for testing purpose"
@@ -681,6 +688,13 @@ export type MerkleDistributor = {
             "name": "totalAmountClaimed",
             "docs": [
               "Total amount of tokens that have been claimed."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "totalAmountForgone",
+            "docs": [
+              "Total amount of tokens that have been forgone."
             ],
             "type": "u64"
           },
@@ -799,6 +813,16 @@ export type MerkleDistributor = {
         {
           "name": "timestamp",
           "type": "i64",
+          "index": false
+        },
+        {
+          "name": "amountClaimed",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "amountForgone",
+          "type": "u64",
           "index": false
         }
       ]
@@ -1529,6 +1553,13 @@ export const IDL: MerkleDistributor = {
             "type": "u64"
           },
           {
+            "name": "unlockedAmountClaimed",
+            "docs": [
+              "Unlocked amount claimed"
+            ],
+            "type": "u64"
+          },
+          {
             "name": "closable",
             "docs": [
               "indicate that whether admin can close this account, for testing purpose"
@@ -1611,6 +1642,13 @@ export const IDL: MerkleDistributor = {
             "name": "totalAmountClaimed",
             "docs": [
               "Total amount of tokens that have been claimed."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "totalAmountForgone",
+            "docs": [
+              "Total amount of tokens that have been forgone."
             ],
             "type": "u64"
           },
@@ -1729,6 +1767,16 @@ export const IDL: MerkleDistributor = {
         {
           "name": "timestamp",
           "type": "i64",
+          "index": false
+        },
+        {
+          "name": "amountClaimed",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "amountForgone",
+          "type": "u64",
           "index": false
         }
       ]

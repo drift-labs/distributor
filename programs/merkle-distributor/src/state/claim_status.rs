@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::error::ErrorCode::ArithmeticError;
+use crate::error::ErrorCode::{ArithmeticError};
 
 /// Holds whether or not a claimant has claimed tokens.
 #[account]
@@ -14,6 +14,8 @@ pub struct ClaimStatus {
     pub locked_amount_withdrawn: u64,
     /// Unlocked amount
     pub unlocked_amount: u64,
+    /// Unlocked amount claimed
+    pub unlocked_amount_claimed: u64,
     /// indicate that whether admin can close this account, for testing purpose
     pub closable: bool,
     /// admin of merkle tree, store for for testing purpose
@@ -70,5 +72,31 @@ impl ClaimStatus {
         } else {
             Ok(0)
         }
+    }
+
+    #[allow(clippy::result_large_err)]
+    pub fn update_unlocked_amount_claimed(&mut self, curr_ts: i64, start_ts: i64, end_ts: i64) -> Result<()> {
+        if curr_ts >= start_ts {
+            if curr_ts >= end_ts {
+                self.unlocked_amount_claimed = self.unlocked_amount;
+            } else {
+                let time_into_unlock = curr_ts.checked_sub(start_ts).ok_or(ArithmeticError)?;
+                let total_unlock_time = end_ts.checked_sub(start_ts).ok_or(ArithmeticError)?;
+
+                self.unlocked_amount_claimed = ((time_into_unlock as u128)
+                    .checked_mul(self.unlocked_amount as u128)
+                    .ok_or(ArithmeticError)?)
+                    .checked_div(total_unlock_time as u128)
+                    .ok_or(ArithmeticError)? as u64;
+            }
+        } else {
+            panic!();
+        }
+
+        Ok(())
+    }
+
+    pub fn get_unlocked_amount_forgone(&self) -> Result<u64> {
+        Ok(self.unlocked_amount.checked_sub(self.unlocked_amount_claimed).ok_or(ArithmeticError)?)
     }
 }

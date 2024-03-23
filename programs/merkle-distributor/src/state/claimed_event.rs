@@ -7,6 +7,8 @@ pub struct NewClaimEvent {
     pub claimant: Pubkey,
     /// Timestamp.
     pub timestamp: i64,
+    pub amount_claimed: u64,
+    pub amount_forgone: u64,
 }
 
 /// Emitted when tokens are claimed.

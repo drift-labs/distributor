@@ -23,6 +23,8 @@ pub struct MerkleDistributor {
     pub max_num_nodes: u64,
     /// Total amount of tokens that have been claimed.
     pub total_amount_claimed: u64,
+    /// Total amount of tokens that have been forgone.
+    pub total_amount_forgone: u64,
     /// Number of nodes that have been claimed.
     pub num_nodes_claimed: u64,
     /// Lockup time start (Unix Timestamp)

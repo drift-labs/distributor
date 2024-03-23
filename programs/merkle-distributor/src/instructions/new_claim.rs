@@ -97,6 +97,10 @@ pub fn handle_new_claim(
         distributor.enable_slot <= curr_slot,
         ErrorCode::ClaimingIsNotStarted
     );
+    require!(
+        distributor.start_ts <= curr_ts,
+        ErrorCode::ClaimingIsNotStarted
+    );
 
     distributor.num_nodes_claimed = distributor
         .num_nodes_claimed
@@ -129,11 +133,11 @@ pub fn handle_new_claim(
 
     // Seed initial values
     claim_status.claimant = claimant_account.key();
-    claim_status.locked_amount = amount_locked;
     claim_status.unlocked_amount = amount_unlocked;
-    claim_status.locked_amount_withdrawn = 0;
     claim_status.closable = distributor.closable;
     claim_status.admin = distributor.admin;
+    claim_status.update_unlocked_amount_claimed(curr_ts, distributor.start_ts, distributor.end_ts)?;
+    let amount_forgone = claim_status.get_unlocked_amount_forgone()?;
 
     let seeds = [
         b"MerkleDistributor".as_ref(),
@@ -152,17 +156,19 @@ pub fn handle_new_claim(
             },
         )
         .with_signer(&[&seeds[..]]),
-        claim_status.unlocked_amount,
+        claim_status.unlocked_amount_claimed,
     )?;
 
     let distributor = &mut ctx.accounts.distributor;
     distributor.total_amount_claimed = distributor
         .total_amount_claimed
-        .checked_add(claim_status.unlocked_amount)
+        .checked_add(claim_status.unlocked_amount_claimed)
         .ok_or(ErrorCode::ArithmeticError)?;
 
+    distributor.total_amount_forgone = distributor.total_amount_forgone.checked_add(amount_forgone).ok_or(ErrorCode::ArithmeticError)?;
+
     require!(
-        distributor.total_amount_claimed <= distributor.max_total_claim,
+        distributor.total_amount_claimed + distributor.total_amount_forgone  <= distributor.max_total_claim,
         ErrorCode::ExceededMaxClaim
     );
 
@@ -176,7 +182,9 @@ pub fn handle_new_claim(
     );
     emit!(NewClaimEvent {
         claimant: claimant_account.key(),
-        timestamp: curr_ts
+        timestamp: curr_ts,
+        amount_claimed: claim_status.unlocked_amount_claimed,
+        amount_forgone: amount_forgone,
     });
 
     Ok(())

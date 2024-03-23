@@ -1,33 +1,30 @@
-# [toolchain]
-# anchor_version = "0.29.0"
-# solana_version = "1.16.9" # Solana version to use
+[toolchain]
 
 [features]
 seeds = true
-
-[registry]
-url = "https://api.apr.dev"
-
-[workspace]
-members = [
-    "programs/merkle-distributor",
-]
-
-[provider]
-cluster = "Localnet"
-wallet = "~/.config/solana/id.json"
-
-[programs.mainnet]
-merkle_distributor = "meRjbQXFNf5En86FXT2YPz1dQzLj4Yb3xK8u1MVgqpb"
+skip-lint = false
 
 [programs.devnet]
 merkle_distributor = "meRjbQXFNf5En86FXT2YPz1dQzLj4Yb3xK8u1MVgqpb"
 
-[programs.testnet]
-merkle_distributor = "meRjbQXFNf5En86FXT2YPz1dQzLj4Yb3xK8u1MVgqpb"
-
 [programs.localnet]
 merkle_distributor = "meRjbQXFNf5En86FXT2YPz1dQzLj4Yb3xK8u1MVgqpb"
+
+[programs.mainnet]
+merkle_distributor = "meRjbQXFNf5En86FXT2YPz1dQzLj4Yb3xK8u1MVgqpb"
+
+[programs.testnet]
+merkle_distributor = "7RxH4QMZzH1iuqpvbm4aNF2rHws1tQRReubPRrwhiZuJ"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "/Users/crisp/.config/solana/id.json"
+
+[workspace]
+members = ["programs/merkle-distributor"]
 
 [scripts]
 test = "yarn mocha"
