@@ -5,13 +5,13 @@ seeds = true
 skip-lint = false
 
 [programs.devnet]
-merkle_distributor = "meRjbQXFNf5En86FXT2YPz1dQzLj4Yb3xK8u1MVgqpb"
+merkle_distributor = "7RxH4QMZzH1iuqpvbm4aNF2rHws1tQRReubPRrwhiZuJ"
 
 [programs.localnet]
-merkle_distributor = "meRjbQXFNf5En86FXT2YPz1dQzLj4Yb3xK8u1MVgqpb"
+merkle_distributor = "7RxH4QMZzH1iuqpvbm4aNF2rHws1tQRReubPRrwhiZuJ"
 
 [programs.mainnet]
-merkle_distributor = "meRjbQXFNf5En86FXT2YPz1dQzLj4Yb3xK8u1MVgqpb"
+merkle_distributor = "7RxH4QMZzH1iuqpvbm4aNF2rHws1tQRReubPRrwhiZuJ"
 
 [programs.testnet]
 merkle_distributor = "7RxH4QMZzH1iuqpvbm4aNF2rHws1tQRReubPRrwhiZuJ"
