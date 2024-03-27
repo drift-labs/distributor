@@ -11,6 +11,8 @@
 //! The Merkle distributor is also significantly easier to manage from an operations perspective, since one does not need to send a transaction to each individual address that may be redeeming tokens.
 
 #![allow(clippy::too_many_arguments)]
+extern crate core;
+
 use anchor_lang::prelude::*;
 use instructions::*;
 
@@ -19,7 +21,7 @@ pub mod instructions;
 pub mod state;
 use solana_security_txt::security_txt;
 
-declare_id!("meRjbQXFNf5En86FXT2YPz1dQzLj4Yb3xK8u1MVgqpb");
+declare_id!("E7HtfkEMhmn9uwL7EFNydcXBWy5WCYN1vFmKKjipEH1x");
 
 security_txt! {
     // Required fields
