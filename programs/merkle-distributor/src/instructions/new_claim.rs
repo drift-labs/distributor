@@ -175,11 +175,9 @@ pub fn handle_new_claim(
 
     // Note: might get truncated, do not rely on
     msg!(
-        "Created new claim with locked {} and {} unlocked with lockup start:{} end:{}",
-        claim_status.locked_amount,
-        claim_status.unlocked_amount,
-        distributor.start_ts,
-        distributor.end_ts,
+        "Created new claim with {} claimed and {} forgone",
+        claim_status.unlocked_amount_claimed,
+        amount_forgone,
     );
     emit!(NewClaimEvent {
         claimant: claimant_account.key(),
