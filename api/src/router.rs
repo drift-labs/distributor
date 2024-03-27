@@ -29,12 +29,13 @@ use tower_http::{
 };
 use tracing::{info, instrument, warn, Span};
 
-use crate::{error, error::ApiError, Result};
-
+use crate::{cache::Cache, error, error::ApiError, Result};
 pub struct RouterState {
     pub program_id: Pubkey,
     pub distributors: Distributors,
     pub tree: HashMap<Pubkey, (Pubkey, TreeNode)>,
+    pub rpc_client: RpcClient,
+    pub cache: Cache,
 }
 
 impl Debug for RouterState {
@@ -69,7 +70,8 @@ pub fn get_routes(state: Arc<RouterState>) -> Router {
     let router = Router::new()
         .route("/", get(root))
         .route("/distributors", get(get_distributors))
-        .route("/user/:user_pubkey", get(get_user_info));
+        .route("/user/:user_pubkey", get(get_user_info))
+        .route("/claim/:user_pubkey", get(get_claim_status));
 
     router.layer(middleware).with_state(state)
 }
@@ -100,6 +102,44 @@ async fn get_user_info(
     Ok(Json(proof))
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ClaimStatusResp {
+    /// Authority that claimed the tokens.
+    pub claimant: Pubkey,
+    /// Locked amount
+    pub locked_amount: u64,
+    /// Locked amount withdrawn
+    pub locked_amount_withdrawn: u64,
+    /// Unlocked amount
+    pub unlocked_amount: u64,
+    /// Unlocked amount claimed
+    pub unlocked_amount_claimed: u64,
+    /// indicate that whether admin can close this account, for testing purpose
+    pub closable: bool,
+    /// admin of merkle tree, store for for testing purpose
+    pub distributor: Pubkey,
+}
+
+/// Retrieve the claim status for a user
+#[instrument(ret)]
+async fn get_claim_status(
+    State(state): State<Arc<RouterState>>,
+    Path(user_pubkey): Path<String>,
+) -> Result<impl IntoResponse> {
+    match state.cache.get(&user_pubkey) {
+        Some(data) => Ok(Json(ClaimStatusResp {
+            claimant: data.data.claimant,
+            locked_amount: data.data.locked_amount,
+            locked_amount_withdrawn: data.data.locked_amount_withdrawn,
+            unlocked_amount: data.data.unlocked_amount,
+            unlocked_amount_claimed: data.data.unlocked_amount_claimed,
+            closable: data.data.closable,
+            distributor: data.data.distributor,
+        })),
+        None => Err(ApiError::UserNotFound(user_pubkey).into()),
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SingleDistributor {
     pub distributor_pubkey: String,
@@ -121,7 +161,7 @@ async fn get_distributors(State(state): State<Arc<RouterState>>) -> Result<impl 
 }
 
 async fn root() -> impl IntoResponse {
-    "Jupiter Airdrop API"
+    "Dirft Airdrop API"
 }
 
 // #[cfg(test)]

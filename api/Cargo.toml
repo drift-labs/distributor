@@ -1,5 +1,5 @@
 [package]
-name = "jupiter-airdrop-api"
+name = "drift-airdrop-api"
 version = { workspace = true }
 edition = { workspace = true }
 
@@ -16,6 +16,9 @@ serde_json = { workspace = true }
 solana-program = { workspace = true }
 solana-rpc-client = { workspace = true }
 solana-rpc-client-api = { workspace = true }
+solana-sdk = { workspace = true }
+solana-pubsub-client = { version = "=1.16.16" }
+solana-account-decoder = { version = "=1.16.16" }
 spl-associated-token-account = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
@@ -24,10 +27,14 @@ tower-http = { workspace = true }
 tracing = { workspace = true }
 tracing-core = { workspace = true }
 tracing-subscriber = { workspace = true }
+futures-util = "0.3.30"
+tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
+dashmap = "5.5.3"
+futures = "0.3.30"
+
 
 [dev-dependencies]
 hyper-tls = "0.5.0"
 futures = "0.3.24"
 assert_matches = "1.5.0"
 hyper = "0.14.27"
-solana-sdk = { workspace = true }

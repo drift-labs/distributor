@@ -37,7 +37,10 @@ pub enum ApiError {
     MerkleDistributorError(String),
 
     #[error("Internal Error")]
-    InternalError,
+    InternalError(#[from] Box<anchor_lang::error::Error>),
+
+    #[error("max connection attempts reached")]
+    MaxReconnectionAttemptsReached,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -77,7 +80,18 @@ impl IntoResponse for ApiError {
                 error!("Merkle Distributor error: {e}");
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
             }
-            ApiError::InternalError => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"),
+            ApiError::InternalError(e) => {
+                error!("Internal error: {e}");
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+            }
+
+            ApiError::MaxReconnectionAttemptsReached => {
+                error!("Max connection attempts reached");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Max connection attempts reached",
+                )
+            }
         };
         (
             status,
