@@ -222,7 +222,7 @@ export type MerkleDistributor = {
           "isSigner": false,
           "relations": [
             "claimant",
-            "admin"
+            "distributor"
           ]
         },
         {
@@ -234,6 +234,14 @@ export type MerkleDistributor = {
           "name": "admin",
           "isMut": false,
           "isSigner": true
+        },
+        {
+          "name": "distributor",
+          "isMut": false,
+          "isSigner": false,
+          "relations": [
+            "admin"
+          ]
         }
       ],
       "args": []
@@ -613,7 +621,7 @@ export type MerkleDistributor = {
             "type": "bool"
           },
           {
-            "name": "admin",
+            "name": "distributor",
             "docs": [
               "admin of merkle tree, store for for testing purpose"
             ],
@@ -1176,7 +1184,7 @@ export const IDL: MerkleDistributor = {
           "isSigner": false,
           "relations": [
             "claimant",
-            "admin"
+            "distributor"
           ]
         },
         {
@@ -1188,6 +1196,14 @@ export const IDL: MerkleDistributor = {
           "name": "admin",
           "isMut": false,
           "isSigner": true
+        },
+        {
+          "name": "distributor",
+          "isMut": false,
+          "isSigner": false,
+          "relations": [
+            "admin"
+          ]
         }
       ],
       "args": []
@@ -1567,7 +1583,7 @@ export const IDL: MerkleDistributor = {
             "type": "bool"
           },
           {
-            "name": "admin",
+            "name": "distributor",
             "docs": [
               "admin of merkle tree, store for for testing purpose"
             ],
