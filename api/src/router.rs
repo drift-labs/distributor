@@ -16,6 +16,7 @@ use axum::{
 };
 use http::Request;
 use jito_merkle_tree::{airdrop_merkle_tree::UserProof, tree_node::TreeNode};
+use merkle_distributor::state::merkle_distributor::MerkleDistributor;
 use serde_derive::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
@@ -32,7 +33,6 @@ use tracing::{info, instrument, warn, Span};
 use crate::{cache::Cache, error, error::ApiError, Result};
 pub struct RouterState {
     pub program_id: Pubkey,
-    pub distributors: Distributors,
     pub tree: HashMap<Pubkey, (Pubkey, TreeNode)>,
     pub rpc_client: RpcClient,
     pub cache: Cache,
@@ -71,20 +71,17 @@ pub fn get_routes(state: Arc<RouterState>) -> Router {
         .route("/", get(root))
         .route("/distributors", get(get_distributors))
         .route("/user/:user_pubkey", get(get_user_info))
-        .route("/claim/:user_pubkey", get(get_claim_status));
+        .route("/claim/:user_pubkey", get(get_claim_status))
+        .route("/eligibility/:user_pubkey", get(get_eligibility));
 
     router.layer(middleware).with_state(state)
 }
 
-/// Retrieve the proof for a given user
-#[instrument(ret)]
-async fn get_user_info(
-    State(state): State<Arc<RouterState>>,
-    Path(user_pubkey): Path<String>,
-) -> Result<impl IntoResponse> {
-    let merkle_tree = &state.tree;
-
-    let user_pubkey: Pubkey = Pubkey::from_str(user_pubkey.as_str())?;
+fn get_user_proof(
+    merkle_tree: &HashMap<Pubkey, (Pubkey, TreeNode)>,
+    pubkey: String,
+) -> Result<UserProof> {
+    let user_pubkey: Pubkey = Pubkey::from_str(pubkey.as_str())?;
     let node = merkle_tree
         .get(&user_pubkey)
         .ok_or(ApiError::UserNotFound(user_pubkey.to_string()))?;
@@ -98,7 +95,17 @@ async fn get_user_info(
             .to_owned()
             .ok_or(ApiError::ProofNotFound(user_pubkey.to_string()))?,
     };
+    Ok(proof)
+}
 
+/// Retrieve the proof for a given user
+#[instrument(ret)]
+async fn get_user_info(
+    State(state): State<Arc<RouterState>>,
+    Path(user_pubkey): Path<String>,
+) -> Result<impl IntoResponse> {
+    let merkle_tree = &state.tree;
+    let proof = get_user_proof(merkle_tree, user_pubkey)?;
     Ok(Json(proof))
 }
 
@@ -126,7 +133,7 @@ async fn get_claim_status(
     State(state): State<Arc<RouterState>>,
     Path(user_pubkey): Path<String>,
 ) -> Result<impl IntoResponse> {
-    match state.cache.get(&user_pubkey) {
+    match state.cache.get_claim_status(&user_pubkey) {
         Some(data) => Ok(Json(ClaimStatusResp {
             claimant: data.data.claimant,
             locked_amount: data.data.locked_amount,
@@ -140,6 +147,55 @@ async fn get_claim_status(
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct EligibilityResp {
+    /// Authority to claim the token
+    pub claimant: String,
+    /// Address of the [MerkleDistributor] the claimant is in
+    pub merkle_tree: String,
+    /// Claim start time from [MerkleDistributor] (Unix Timestamp)
+    pub start_ts: i64,
+    /// Claim start time from [MerkleDistributor] (Unix Timestamp)
+    pub end_ts: i64,
+    /// Claimant's proof of inclusion in the Merkle Tree
+    pub proof: Vec<[u8; 32]>,
+    /// Amount user can claim at the beginning, start_amount = amount * START_PCT
+    pub start_amount: u64,
+    /// Amount user can claim at the end (max bonus)
+    pub end_amount: u64,
+    /// Amount user has claimed, will be 0 if user has not claimed yet
+    pub claimed_amount: u64,
+}
+
+/// Retrieve the claim status for a user
+#[instrument(ret)]
+async fn get_eligibility(
+    State(state): State<Arc<RouterState>>,
+    Path(user_pubkey): Path<String>,
+) -> Result<impl IntoResponse> {
+    let merkle_tree = &state.tree;
+    let proof = get_user_proof(merkle_tree, user_pubkey.clone())?;
+    let distributor = state.cache.get_distributor(&proof.merkle_tree).ok_or(
+        ApiError::MerkleDistributorNotFound(proof.merkle_tree.clone()),
+    )?;
+    let claimed_amount = state
+        .cache
+        .get_claim_status(&user_pubkey)
+        .map(|r| r.data.unlocked_amount_claimed)
+        .unwrap_or(0);
+
+    Ok(Json(EligibilityResp {
+        claimant: user_pubkey,
+        merkle_tree: proof.merkle_tree,
+        start_ts: distributor.start_ts,
+        end_ts: distributor.end_ts,
+        proof: proof.proof,
+        start_amount: proof.amount * 70 / 100,
+        end_amount: proof.amount,
+        claimed_amount,
+    }))
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SingleDistributor {
     pub distributor_pubkey: String,
@@ -150,14 +206,117 @@ pub struct SingleDistributor {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Distributors {
-    pub max_num_nodes: u64,
+pub struct DistributorAccount {
+    /// Version of the airdrop
+    pub version: u64,
+    /// The 256-bit merkle root.
+    pub root: [u8; 32],
+    /// [Mint] of the token to be distributed.
+    pub mint: Pubkey,
+    /// Token Address of the vault
+    pub token_vault: Pubkey,
+    /// Maximum number of tokens that can ever be claimed from this [MerkleDistributor].
     pub max_total_claim: u64,
-    pub trees: Vec<SingleDistributor>,
+    /// Maximum number of nodes in [MerkleDistributor].
+    pub max_num_nodes: u64,
+    /// Total amount of tokens that have been claimed.
+    pub total_amount_claimed: u64,
+    /// Total amount of tokens that have been forgone.
+    pub total_amount_forgone: u64,
+    /// Number of nodes that have been claimed.
+    pub num_nodes_claimed: u64,
+    /// Lockup time start (Unix Timestamp)
+    pub start_ts: i64,
+    /// Lockup time end (Unix Timestamp)
+    pub end_ts: i64,
+    /// Clawback start (Unix Timestamp)
+    pub clawback_start_ts: i64,
+    /// Clawback receiver
+    pub clawback_receiver: Pubkey,
+    /// Admin wallet
+    pub admin: Pubkey,
+    /// Whether or not the distributor has been clawed back
+    pub clawed_back: bool,
+    /// this merkle tree is enable from this slot
+    pub enable_slot: u64,
+    /// indicate that whether admin can close this pool, for testing purpose
+    pub closable: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct MerkleDistributorResp {
+    /// pubkey of the distributor
+    pub pubkey: String,
+    /// Version of the airdrop
+    pub version: u64,
+    // /// The 256-bit merkle root.
+    // pub root: [u8; 32],
+    /// [Mint] of the token to be distributed.
+    pub mint: String,
+    /// Token Address of the vault
+    pub token_vault: String,
+    /// Maximum number of tokens that can ever be claimed from this [MerkleDistributor].
+    pub max_total_claim: u64,
+    /// Maximum number of nodes in [MerkleDistributor].
+    pub max_num_nodes: u64,
+    /// Total amount of tokens that have been claimed.
+    pub total_amount_claimed: u64,
+    /// Total amount of tokens that have been forgone.
+    pub total_amount_forgone: u64,
+    /// Number of nodes that have been claimed.
+    pub num_nodes_claimed: u64,
+    /// Lockup time start (Unix Timestamp)
+    pub start_ts: i64,
+    /// Lockup time end (Unix Timestamp)
+    pub end_ts: i64,
+    /// Clawback start (Unix Timestamp)
+    pub clawback_start_ts: i64,
+    /// Clawback receiver
+    pub clawback_receiver: String,
+    /// Admin wallet
+    pub admin: String,
+    /// Whether or not the distributor has been clawed back
+    pub clawed_back: bool,
+    /// this merkle tree is enable from this slot
+    pub enable_slot: u64,
+    /// indicate that whether admin can close this pool, for testing purpose
+    pub closable: bool,
+}
+
+impl MerkleDistributorResp {
+    fn from(pubkey: String, distributor: MerkleDistributor) -> Self {
+        MerkleDistributorResp {
+            pubkey,
+            version: distributor.version,
+            // root: distributor.root,
+            mint: distributor.mint.to_string(),
+            token_vault: distributor.token_vault.to_string(),
+            max_total_claim: distributor.max_total_claim,
+            max_num_nodes: distributor.max_num_nodes,
+            total_amount_claimed: distributor.total_amount_claimed,
+            total_amount_forgone: distributor.total_amount_forgone,
+            num_nodes_claimed: distributor.num_nodes_claimed,
+            start_ts: distributor.start_ts,
+            end_ts: distributor.end_ts,
+            clawback_start_ts: distributor.clawback_start_ts,
+            clawback_receiver: distributor.clawback_receiver.to_string(),
+            admin: distributor.admin.to_string(),
+            clawed_back: distributor.clawed_back,
+            enable_slot: distributor.enable_slot,
+            closable: distributor.closable,
+        }
+    }
 }
 
 async fn get_distributors(State(state): State<Arc<RouterState>>) -> Result<impl IntoResponse> {
-    Ok(Json(state.distributors.clone()))
+    Ok(Json(
+        state
+            .cache
+            .get_all_distributors()
+            .into_iter()
+            .map(|(k, v)| MerkleDistributorResp::from(k, v))
+            .collect::<Vec<MerkleDistributorResp>>(),
+    ))
 }
 
 async fn root() -> impl IntoResponse {

@@ -63,6 +63,7 @@ pub fn process_close_claim_status(args: &Args) {
                     admin: keypair.pubkey(),
                     claimant: value.1.claimant,
                     claim_status: value.0,
+                    distributor: value.1.distributor,
                 }
                 .to_account_metas(None),
                 data: merkle_distributor::instruction::CloseClaimStatus {}.data(),

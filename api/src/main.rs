@@ -4,21 +4,18 @@ mod router;
 
 use std::{
     collections::HashMap, fmt::Debug, fs, net::SocketAddr, path::PathBuf, str::FromStr, sync::Arc,
-    thread, time,
 };
 
 use clap::Parser;
+use futures::future::join_all;
 use jito_merkle_tree::{airdrop_merkle_tree::AirdropMerkleTree, utils::get_merkle_distributor_pda};
 use router::RouterState;
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use tokio::sync::Mutex;
 use tracing::{info, instrument};
 
-use crate::{
-    cache::Cache,
-    error::ApiError,
-    router::{Distributors, SingleDistributor},
-};
+use crate::{cache::Cache, error::ApiError, router::SingleDistributor};
 pub type Result<T> = std::result::Result<T, ApiError>;
 
 #[derive(Parser, Debug)]
@@ -68,61 +65,71 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         .collect();
     paths.sort_by_key(|dir| dir.path());
 
-    let mut tree = HashMap::new();
-    let mut max_num_nodes = 0u64;
-    let mut max_total_claim = 0u64;
-    let mut distributors = vec![];
-    let one_sec = time::Duration::from_millis(1000);
+    let tree = Arc::new(Mutex::new(HashMap::new()));
+    let distributors = Arc::new(Mutex::new(vec![]));
     let start_all_trees = std::time::Instant::now();
     println!("loading {} merkle trees", paths.len());
-    for file in paths {
-        let start_single_tree = std::time::Instant::now();
-        let single_tree_path = file.path();
-        let single_tree = AirdropMerkleTree::new_from_file(&single_tree_path)?;
 
-        let (distributor_pubkey, _bump) =
-            get_merkle_distributor_pda(&args.program_id, &args.mint, single_tree.airdrop_version);
+    let tasks: Vec<_> = paths
+        .into_iter()
+        .map(|file| {
+            let distributors_clone = distributors.clone();
+            let tree_clone = tree.clone();
+            tokio::spawn(async move {
+                let start_single_tree = std::time::Instant::now();
+                let single_tree_path = file.path();
+                let single_tree = match AirdropMerkleTree::new_from_file(&single_tree_path) {
+                    Ok(tree) => tree,
+                    Err(e) => {
+                        eprintln!(
+                            "error loading tree from {}: {}",
+                            single_tree_path.display(),
+                            e
+                        );
+                        return;
+                    }
+                };
 
-        max_total_claim = max_total_claim
-            .checked_add(single_tree.max_total_claim)
-            .unwrap();
-        max_num_nodes = max_num_nodes
-            .checked_add(single_tree.max_num_nodes)
-            .unwrap();
-        distributors.push(SingleDistributor {
-            distributor_pubkey: distributor_pubkey.to_string(),
-            airdrop_version: single_tree.airdrop_version,
-            max_num_nodes: single_tree.max_num_nodes,
-            max_total_claim: single_tree.max_total_claim,
-        });
-        for node in single_tree.tree_nodes.iter() {
-            tree.insert(node.claimant, (distributor_pubkey, node.clone()));
-        }
-        let duration_single_tree = start_single_tree.elapsed();
-        println!(
-            "loaded tree {} from {} with {} nodes in {:?}",
-            single_tree.airdrop_version,
-            single_tree_path.display(),
-            single_tree.tree_nodes.len(),
-            duration_single_tree
-        );
-        thread::sleep(one_sec);
-    }
+                let (distributor_pubkey, _bump) = get_merkle_distributor_pda(
+                    &args.program_id,
+                    &args.mint,
+                    single_tree.airdrop_version,
+                );
+
+                let mut distributors = distributors_clone.lock().await;
+                distributors.push(SingleDistributor {
+                    distributor_pubkey: distributor_pubkey.to_string(),
+                    airdrop_version: single_tree.airdrop_version,
+                    max_num_nodes: single_tree.max_num_nodes,
+                    max_total_claim: single_tree.max_total_claim,
+                });
+                for node in single_tree.tree_nodes.iter() {
+                    tree_clone
+                        .lock()
+                        .await
+                        .insert(node.claimant, (distributor_pubkey, node.clone()));
+                }
+                let duration_single_tree = start_single_tree.elapsed();
+                println!(
+                    "loaded tree {} from {} with {} nodes in {:?}",
+                    single_tree.airdrop_version,
+                    single_tree_path.display(),
+                    single_tree.tree_nodes.len(),
+                    duration_single_tree
+                );
+            })
+        })
+        .collect();
+    join_all(tasks).await;
+
     let duration_all_trees = start_all_trees.elapsed();
     println!("Done loading all trees in {:?}", duration_all_trees);
 
-    distributors.sort_unstable_by(|a, b| a.airdrop_version.cmp(&b.airdrop_version));
-
-    let mut cache = Cache::new(args.program_id, distributors.clone());
+    let mut cache = Cache::new(args.program_id, distributors.lock().await.clone());
     cache.subscribe(args.rpc_url, args.ws_url).await?;
 
     let state = Arc::new(RouterState {
-        distributors: Distributors {
-            max_num_nodes,
-            max_total_claim,
-            trees: distributors,
-        },
-        tree: tree.clone(),
+        tree: tree.lock().await.clone(),
         program_id: args.program_id,
         rpc_client,
         cache,

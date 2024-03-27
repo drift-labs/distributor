@@ -1,5 +1,6 @@
 use std::{
     ops::{Deref, DerefMut},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -7,7 +8,7 @@ use anchor_lang::{AccountDeserialize, Discriminator, __private::base64};
 use dashmap::DashMap;
 use futures::future::join_all;
 use futures_util::StreamExt;
-use merkle_distributor::state::claim_status::ClaimStatus;
+use merkle_distributor::state::{claim_status::ClaimStatus, merkle_distributor::MerkleDistributor};
 use solana_account_decoder::{UiAccountData, UiAccountEncoding};
 use solana_program::pubkey::Pubkey;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
@@ -30,19 +31,21 @@ impl Deref for Cache {
     type Target = DashMap<String, DataAndSlot<ClaimStatus>>;
 
     fn deref(&self) -> &Self::Target {
-        &self.cache
+        &self.claim_status_cache
     }
 }
 
 impl DerefMut for Cache {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        Arc::get_mut(&mut self.cache).expect("Attempt to mutate a shared Cache")
+        Arc::get_mut(&mut self.claim_status_cache).expect("Attempt to mutate a shared Cache")
     }
 }
 
 pub struct Cache {
     /// map from claimant to ClaimStatus account;
-    cache: Arc<DashMap<String, DataAndSlot<ClaimStatus>>>,
+    claim_status_cache: Arc<DashMap<String, DataAndSlot<ClaimStatus>>>,
+    /// map from pubkey to MerkleDistributor account;
+    distributor_cache: Arc<DashMap<String, MerkleDistributor>>,
     // rpc_client: RpcClient,
     // pubsub_client: PubsubClient,
     program_id: Pubkey,
@@ -55,7 +58,8 @@ pub struct Cache {
 impl Cache {
     pub fn new(program_id: Pubkey, distributors: Vec<SingleDistributor>) -> Self {
         Self {
-            cache: Arc::new(DashMap::new()),
+            claim_status_cache: Arc::new(DashMap::new()),
+            distributor_cache: Arc::new(DashMap::new()),
             program_id,
             subscribed: false,
             unsubscriber: None,
@@ -63,12 +67,27 @@ impl Cache {
         }
     }
 
-    pub fn get(&self, claimant: &String) -> Option<DataAndSlot<ClaimStatus>> {
-        self.cache.get(claimant).map(|r| r.value().clone())
+    pub fn get_claim_status(&self, claimant: &String) -> Option<DataAndSlot<ClaimStatus>> {
+        self.claim_status_cache
+            .get(claimant)
+            .map(|r| r.value().clone())
+    }
+
+    pub fn get_all_distributors(&self) -> Vec<(String, MerkleDistributor)> {
+        self.distributor_cache
+            .iter()
+            .map(|r| (r.key().clone(), r.value().clone()))
+            .collect::<Vec<(String, MerkleDistributor)>>()
+    }
+
+    pub fn get_distributor(&self, pubkey: &String) -> Option<MerkleDistributor> {
+        self.distributor_cache
+            .get(pubkey)
+            .map(|r| r.value().clone())
     }
 
     pub fn _len(&self) -> usize {
-        self.cache.len()
+        self.claim_status_cache.len()
     }
 
     /// starts a tokio task in the background that handles updating the cache.
@@ -202,7 +221,8 @@ impl Cache {
             }
         });
 
-        // TODO: do gpa for each merkle distributor, to avoid getting truncated by RPC.
+        // TODO: do gpa for each merkle distributor
+        // This currently loads all ClaimStatus accounts, and can potentially be truncated by RPC if list is too long
         let rpc_client = RpcClient::new(rpc_url.clone());
         match rpc_client
             .get_program_accounts_with_config(&program_id, gpa_config_clone_1)
@@ -239,31 +259,73 @@ impl Cache {
             }
         };
 
-        let cache_clone = Arc::clone(&self.cache);
+        // hydrate distributor cache
+        let distributor_cache = Arc::clone(&self.distributor_cache);
+        let distributors_to_load = self.distributors.clone();
+        let distributor_keys_vec = self
+            .distributors
+            .iter()
+            .map(|d| Pubkey::from_str(&d.distributor_pubkey).unwrap())
+            .collect::<Vec<Pubkey>>();
+        let distributor_keys = distributor_keys_vec.as_slice();
+        match rpc_client
+            .get_multiple_accounts_with_commitment(&distributor_keys, CommitmentConfig::confirmed())
+            .await
+        {
+            Ok(accounts) => {
+                for (index, account) in accounts.value.into_iter().enumerate() {
+                    let distributor = distributors_to_load.get(index).unwrap();
+                    match account {
+                        Some(account) => {
+                            let distributor_data =
+                                MerkleDistributor::try_deserialize(&mut account.data.as_slice())
+                                    .map_err(|err| ApiError::InternalError(Box::new(err)))
+                                    .unwrap();
+                            distributor_cache
+                                .insert(distributor.distributor_pubkey.clone(), distributor_data);
+                        }
+                        None => {
+                            println!(
+                                "Error in gma for distributor: {}",
+                                distributor.distributor_pubkey
+                            );
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!("Error in distributor gma: {:?}", e);
+            }
+        }
+
+        let cache_clone = Arc::clone(&self.claim_status_cache);
         tokio::spawn(async move {
             while let Some((pubkey, data)) = update_rx.recv().await {
                 match cache_clone.get(&pubkey) {
                     Some(current) => {
                         if current.slot <= data.slot {
                             println!(
-                                "Updating cache with newer slot for claimant: {} ({})",
+                                "Updating cache with newer slot for claimant: {} ({}) on {} tree",
                                 data.data.claimant.to_string(),
-                                pubkey
+                                pubkey,
+                                data.data.distributor.to_string()
                             );
                             cache_clone.insert(data.data.claimant.to_string(), data);
                         } else {
                             println!(
-                                "Got an update with older slot than what's in cache for claimant: {} ({})",
+                                "Got an update with older slot than what's in cache for claimant: {} ({}) on {} tree",
                                 data.data.claimant.to_string(),
-                                pubkey
+                                pubkey,
+                                data.data.distributor.to_string()
                             );
                         }
                     }
                     None => {
                         println!(
-                            "Inserting new data into cache for claimant: {} ({})",
+                            "Inserting new data into cache for claimant: {} ({}) on {} tree",
                             data.data.claimant.to_string(),
-                            pubkey
+                            pubkey,
+                            data.data.distributor.to_string()
                         );
                         cache_clone.insert(data.data.claimant.to_string(), data);
                     }

@@ -41,6 +41,9 @@ pub enum ApiError {
 
     #[error("max connection attempts reached")]
     MaxReconnectionAttemptsReached,
+
+    #[error("Merkle Distributor not found")]
+    MerkleDistributorNotFound(String),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -90,6 +93,14 @@ impl IntoResponse for ApiError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Max connection attempts reached",
+                )
+            }
+
+            ApiError::MerkleDistributorNotFound(s) => {
+                error!("Merkle Distributor not found: {s}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Merkle Distributor not found",
                 )
             }
         };
