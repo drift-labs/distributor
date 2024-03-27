@@ -1,9 +1,9 @@
 use anchor_lang::{account, context::Context, prelude::*, Accounts, Key, ToAccountInfo};
 
-use crate::{error::ErrorCode, state::{
-    claim_status::ClaimStatus,
-    merkle_distributor::MerkleDistributor,
-}};
+use crate::{
+    error::ErrorCode,
+    state::{claim_status::ClaimStatus, merkle_distributor::MerkleDistributor},
+};
 
 // Accounts for [merkle_distributor::close_claim_status].
 #[derive(Accounts)]

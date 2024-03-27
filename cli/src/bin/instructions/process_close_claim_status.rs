@@ -60,6 +60,7 @@ pub fn process_close_claim_status(args: &Args) {
             close_ixs.push(Instruction {
                 program_id: args.program_id,
                 accounts: merkle_distributor::accounts::CloseClaimStatus {
+                    distributor: value.1.distributor,
                     admin: keypair.pubkey(),
                     claimant: value.1.claimant,
                     claim_status: value.0,

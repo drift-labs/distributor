@@ -137,7 +137,11 @@ pub fn handle_new_claim(
     claim_status.unlocked_amount = amount_unlocked;
     claim_status.closable = distributor.closable;
     claim_status.distributor = distributor_key;
-    claim_status.update_unlocked_amount_claimed(curr_ts, distributor.start_ts, distributor.end_ts)?;
+    claim_status.update_unlocked_amount_claimed(
+        curr_ts,
+        distributor.start_ts,
+        distributor.end_ts,
+    )?;
     let amount_forgone = claim_status.get_unlocked_amount_forgone()?;
 
     let seeds = [
@@ -166,10 +170,14 @@ pub fn handle_new_claim(
         .checked_add(claim_status.unlocked_amount_claimed)
         .ok_or(ErrorCode::ArithmeticError)?;
 
-    distributor.total_amount_forgone = distributor.total_amount_forgone.checked_add(amount_forgone).ok_or(ErrorCode::ArithmeticError)?;
+    distributor.total_amount_forgone = distributor
+        .total_amount_forgone
+        .checked_add(amount_forgone)
+        .ok_or(ErrorCode::ArithmeticError)?;
 
     require!(
-        distributor.total_amount_claimed + distributor.total_amount_forgone  <= distributor.max_total_claim,
+        distributor.total_amount_claimed + distributor.total_amount_forgone
+            <= distributor.max_total_claim,
         ErrorCode::ExceededMaxClaim
     );
 

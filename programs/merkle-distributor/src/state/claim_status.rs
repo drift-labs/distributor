@@ -1,6 +1,9 @@
 use anchor_lang::prelude::*;
 
-use crate::error::ErrorCode::{ArithmeticError};
+use crate::error::ErrorCode::{ArithmeticError, ClaimingIsNotStarted};
+
+pub const START_CLAIM_PCT: u128 = 700_000; // .7
+pub const PCT_PRECISION: u128 = 1_000_000;
 
 /// Holds whether or not a claimant has claimed tokens.
 #[account]
@@ -75,7 +78,12 @@ impl ClaimStatus {
     }
 
     #[allow(clippy::result_large_err)]
-    pub fn update_unlocked_amount_claimed(&mut self, curr_ts: i64, start_ts: i64, end_ts: i64) -> Result<()> {
+    pub fn update_unlocked_amount_claimed(
+        &mut self,
+        curr_ts: i64,
+        start_ts: i64,
+        end_ts: i64,
+    ) -> Result<()> {
         if curr_ts >= start_ts {
             if curr_ts >= end_ts {
                 self.unlocked_amount_claimed = self.unlocked_amount;
@@ -83,20 +91,101 @@ impl ClaimStatus {
                 let time_into_unlock = curr_ts.checked_sub(start_ts).ok_or(ArithmeticError)?;
                 let total_unlock_time = end_ts.checked_sub(start_ts).ok_or(ArithmeticError)?;
 
-                self.unlocked_amount_claimed = ((time_into_unlock as u128)
-                    .checked_mul(self.unlocked_amount as u128)
-                    .ok_or(ArithmeticError)?)
-                    .checked_div(total_unlock_time as u128)
+                let start_amount = (self.unlocked_amount as u128)
+                    .checked_mul(START_CLAIM_PCT)
+                    .ok_or(ArithmeticError)?
+                    .checked_div(PCT_PRECISION)
                     .ok_or(ArithmeticError)? as u64;
+
+                let bonus_amount = ((time_into_unlock as u128)
+                    .checked_mul(
+                        self.unlocked_amount
+                            .checked_sub(start_amount)
+                            .ok_or(ArithmeticError)? as u128,
+                    )
+                    .ok_or(ArithmeticError)?)
+                .checked_div(total_unlock_time as u128)
+                .ok_or(ArithmeticError)? as u64;
+
+                self.unlocked_amount_claimed = start_amount
+                    .checked_add(bonus_amount)
+                    .ok_or(ArithmeticError)?;
             }
         } else {
-            panic!();
+            return Err(ClaimingIsNotStarted.into());
         }
 
         Ok(())
     }
 
     pub fn get_unlocked_amount_forgone(&self) -> Result<u64> {
-        Ok(self.unlocked_amount.checked_sub(self.unlocked_amount_claimed).ok_or(ArithmeticError)?)
+        Ok(self
+            .unlocked_amount
+            .checked_sub(self.unlocked_amount_claimed)
+            .ok_or(ArithmeticError)?)
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use crate::error::ErrorCode::ClaimingIsNotStarted;
+    use crate::state::claim_status::ClaimStatus;
+
+    #[test]
+    fn update_unlocked_amount_claimed() {
+        let mut claim_status = ClaimStatus {
+            unlocked_amount: 1_000_000,
+          ..ClaimStatus::default()
+        };
+
+        let current_ts = 0;
+        let start_ts = 1;
+        let end_ts = 10;
+
+        let result = claim_status.update_unlocked_amount_claimed(current_ts, start_ts, end_ts);
+
+        assert_eq!(result, Err(ClaimingIsNotStarted.into()));
+
+        let mut claim_status = ClaimStatus {
+            unlocked_amount: 1_000_000,
+            ..ClaimStatus::default()
+        };
+
+        let current_ts = 1;
+        let start_ts = 1;
+        let end_ts = 11;
+
+        let result = claim_status.update_unlocked_amount_claimed(current_ts, start_ts, end_ts).unwrap();
+
+        assert_eq!(claim_status.unlocked_amount_claimed, 700_000);
+        assert_eq!(claim_status.get_unlocked_amount_forgone(), Ok(300_000));
+
+        let current_ts = 6;
+        let start_ts = 1;
+        let end_ts = 11;
+
+        let result = claim_status.update_unlocked_amount_claimed(current_ts, start_ts, end_ts).unwrap();
+
+        assert_eq!(claim_status.unlocked_amount_claimed, 850_000);
+        assert_eq!(claim_status.get_unlocked_amount_forgone(), Ok(150_000));
+
+        let current_ts = 11;
+        let start_ts = 1;
+        let end_ts = 11;
+
+        let result = claim_status.update_unlocked_amount_claimed(current_ts, start_ts, end_ts).unwrap();
+
+        assert_eq!(claim_status.unlocked_amount_claimed, 1_000_000);
+        assert_eq!(claim_status.get_unlocked_amount_forgone(), Ok(0));
+
+        let current_ts = 12;
+        let start_ts = 1;
+        let end_ts = 11;
+
+        let result = claim_status.update_unlocked_amount_claimed(current_ts, start_ts, end_ts).unwrap();
+
+        assert_eq!(claim_status.unlocked_amount_claimed, 1_000_000);
+        assert_eq!(claim_status.get_unlocked_amount_forgone(), Ok(0));
     }
 }
