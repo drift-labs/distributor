@@ -1,5 +1,7 @@
 .idea/
 
+dummy-csv.csv
+
 .anchor
 .DS_Store
 target/*

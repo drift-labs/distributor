@@ -5,16 +5,16 @@ seeds = true
 skip-lint = false
 
 [programs.devnet]
-merkle_distributor = "7RxH4QMZzH1iuqpvbm4aNF2rHws1tQRReubPRrwhiZuJ"
+merkle_distributor = "E7HtfkEMhmn9uwL7EFNydcXBWy5WCYN1vFmKKjipEH1x"
 
 [programs.localnet]
-merkle_distributor = "7RxH4QMZzH1iuqpvbm4aNF2rHws1tQRReubPRrwhiZuJ"
+merkle_distributor = "E7HtfkEMhmn9uwL7EFNydcXBWy5WCYN1vFmKKjipEH1x"
 
 [programs.mainnet]
-merkle_distributor = "7RxH4QMZzH1iuqpvbm4aNF2rHws1tQRReubPRrwhiZuJ"
+merkle_distributor = "E7HtfkEMhmn9uwL7EFNydcXBWy5WCYN1vFmKKjipEH1x"
 
 [programs.testnet]
-merkle_distributor = "7RxH4QMZzH1iuqpvbm4aNF2rHws1tQRReubPRrwhiZuJ"
+merkle_distributor = "E7HtfkEMhmn9uwL7EFNydcXBWy5WCYN1vFmKKjipEH1x"
 
 [registry]
 url = "https://api.apr.dev"

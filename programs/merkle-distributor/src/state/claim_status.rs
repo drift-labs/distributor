@@ -19,7 +19,7 @@ pub struct ClaimStatus {
     /// indicate that whether admin can close this account, for testing purpose
     pub closable: bool,
     /// admin of merkle tree, store for for testing purpose
-    pub admin: Pubkey,
+    pub distributor: Pubkey,
 }
 
 impl ClaimStatus {

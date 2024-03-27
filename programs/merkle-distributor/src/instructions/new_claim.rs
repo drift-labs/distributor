@@ -121,6 +121,7 @@ pub fn handle_new_claim(
         &amount_locked.to_le_bytes(),
     ]);
 
+    let distributor_key = ctx.accounts.distributor.key();
     let distributor = &ctx.accounts.distributor;
     let node = hashv(&[LEAF_PREFIX, &node.to_bytes()]);
 
@@ -135,7 +136,7 @@ pub fn handle_new_claim(
     claim_status.claimant = claimant_account.key();
     claim_status.unlocked_amount = amount_unlocked;
     claim_status.closable = distributor.closable;
-    claim_status.admin = distributor.admin;
+    claim_status.distributor = distributor_key;
     claim_status.update_unlocked_amount_claimed(curr_ts, distributor.start_ts, distributor.end_ts)?;
     let amount_forgone = claim_status.get_unlocked_amount_forgone()?;
 
