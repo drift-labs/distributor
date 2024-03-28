@@ -11,7 +11,7 @@ use futures_util::StreamExt;
 use merkle_distributor::state::{claim_status::ClaimStatus, merkle_distributor::MerkleDistributor};
 use solana_account_decoder::{UiAccountData, UiAccountEncoding};
 use solana_program::pubkey::Pubkey;
-use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
+use solana_pubsub_client::nonblocking::pubsub_client::{self, PubsubClient};
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{
     config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
@@ -51,7 +51,7 @@ pub struct Cache {
     program_id: Pubkey,
 
     pub subscribed: bool,
-    unsubscriber: Option<tokio::sync::mpsc::Sender<()>>,
+    unsubscriber: Option<tokio::sync::watch::Sender<()>>,
     distributors: Vec<SingleDistributor>,
 }
 
@@ -90,54 +90,26 @@ impl Cache {
         self.claim_status_cache.len()
     }
 
-    /// starts a tokio task in the background that handles updating the cache.
-    /// It starts a ProgramSubscribe from solana rpc and then does a getProgramAccounts
-    /// to update the cache.
-    pub async fn subscribe(&mut self, rpc_url: String, ws_url: String) -> Result<(), ApiError> {
-        let ws_url = ws_url.clone();
-        let rpc_url = rpc_url.clone();
-        let program_id = self.program_id.clone();
-
-        let (unsub_tx, mut unsub_rx) = tokio::sync::mpsc::channel::<()>(1);
-        self.unsubscriber = Some(unsub_tx);
-
-        // channel to send rpc things from the background task to cache updating task
-        // payload: (ClaimStatusPubkey, ClaimStatus)
-        let (update_tx, mut update_rx) =
-            tokio::sync::mpsc::channel::<(String, DataAndSlot<ClaimStatus>)>(1000);
-
-        // Clone the sender to move into the async block
-        let update_tx_clone = update_tx.clone();
-
-        let gpa_config = RpcProgramAccountsConfig {
-            filters: Some(vec![RpcFilterType::Memcmp(Memcmp::new(
-                0,
-                solana_rpc_client_api::filter::MemcmpEncodedBytes::Bytes(
-                    ClaimStatus::DISCRIMINATOR.into(),
-                ),
-            ))]),
-            account_config: RpcAccountInfoConfig {
-                commitment: Some(CommitmentConfig::confirmed()),
-                encoding: Some(UiAccountEncoding::Base64),
-                data_slice: None,
-                min_context_slot: None,
-            },
-            with_context: Some(true),
-        };
-        let gpa_config_clone_1 = gpa_config.clone();
-
-        println!("Cache background updater starting up");
-
+    async fn hydrate_cache_for_config(
+        &mut self,
+        gpa_config: RpcProgramAccountsConfig,
+        rpc_client: &RpcClient,
+        pubsub_client: PubsubClient,
+        update_tx: tokio::sync::mpsc::Sender<(String, DataAndSlot<ClaimStatus>)>,
+        mut unsub_rx: tokio::sync::watch::Receiver<()>,
+    ) -> Result<(), ApiError> {
         let mut attempt = 0;
         let mut unsubscribed = false;
         let max_reconnection_attempts = 20;
         let base_delay = tokio::time::Duration::from_secs(5);
+        let program_id = self.program_id.clone();
 
+        let gpa_config_clone = gpa_config.clone();
+        let update_tx_clone = update_tx.clone();
         tokio::spawn({
             async move {
                 loop {
-                    let gpa_config_clone_2 = gpa_config.clone();
-                    let pubsub_client = PubsubClient::new(&ws_url).await.unwrap();
+                    let gpa_config_clone_2 = gpa_config_clone.clone();
                     match pubsub_client
                         .program_subscribe(&program_id, Some(gpa_config_clone_2))
                         .await
@@ -187,8 +159,8 @@ impl Cache {
                                         }
                                     }
                                 }
-                                _ = unsub_rx.recv() => {
-                                    println!("Unsubscribing.");
+                                _ = unsub_rx.changed() => {
+                                    println!("Cache update loop unsubscribing.");
                                     unsubscriber().await;
                                     unsubscribed = true;
                                     break;
@@ -221,11 +193,9 @@ impl Cache {
             }
         });
 
-        // TODO: do gpa for each merkle distributor
-        // This currently loads all ClaimStatus accounts, and can potentially be truncated by RPC if list is too long
-        let rpc_client = RpcClient::new(rpc_url.clone());
+        let update_tx_clone = update_tx.clone();
         match rpc_client
-            .get_program_accounts_with_config(&program_id, gpa_config_clone_1)
+            .get_program_accounts_with_config(&program_id, gpa_config)
             .await
         {
             Ok(accounts) => {
@@ -234,7 +204,7 @@ impl Cache {
                 let tasks: Vec<_> = accounts
                     .into_iter()
                     .map(|(pubkey, account)| {
-                        let update_tx_clone = update_tx.clone();
+                        let update_tx_clone = update_tx_clone.clone();
                         tokio::spawn(async move {
                             let data = ClaimStatus::try_deserialize(&mut account.data.as_slice())
                                 .map_err(|err| ApiError::InternalError(Box::new(err)))
@@ -259,14 +229,21 @@ impl Cache {
             }
         };
 
+        Ok(())
+    }
+
+    fn get_distributor_keys(&self) -> Vec<Pubkey> {
+        self.distributors
+            .iter()
+            .map(|d| Pubkey::from_str(&d.distributor_pubkey).unwrap())
+            .collect::<Vec<Pubkey>>()
+    }
+
+    async fn hydrate_distributors_cache(&mut self, rpc_client: &RpcClient) {
         // hydrate distributor cache
         let distributor_cache = Arc::clone(&self.distributor_cache);
         let distributors_to_load = self.distributors.clone();
-        let distributor_keys_vec = self
-            .distributors
-            .iter()
-            .map(|d| Pubkey::from_str(&d.distributor_pubkey).unwrap())
-            .collect::<Vec<Pubkey>>();
+        let distributor_keys_vec = self.get_distributor_keys();
         let distributor_keys = distributor_keys_vec.as_slice();
         match rpc_client
             .get_multiple_accounts_with_commitment(&distributor_keys, CommitmentConfig::confirmed())
@@ -297,7 +274,14 @@ impl Cache {
                 println!("Error in distributor gma: {:?}", e);
             }
         }
+    }
 
+    /// Starts a tokio task in the background that handles updating the cache. getProgramAccounts
+    /// and programSubscribe tasks should send account updates through to update_rx
+    fn start_cache_updater(
+        &mut self,
+        mut update_rx: tokio::sync::mpsc::Receiver<(String, DataAndSlot<ClaimStatus>)>,
+    ) {
         let cache_clone = Arc::clone(&self.claim_status_cache);
         tokio::spawn(async move {
             while let Some((pubkey, data)) = update_rx.recv().await {
@@ -332,6 +316,68 @@ impl Cache {
                 };
             }
         });
+    }
+
+    /// starts a tokio task in the background that handles updating the cache.
+    /// It starts a ProgramSubscribe from solana rpc and then does a getProgramAccounts
+    /// to update the cache.
+    pub async fn subscribe(&mut self, rpc_url: String, ws_url: String) -> Result<(), ApiError> {
+        let ws_url = ws_url.clone();
+        let rpc_url = rpc_url.clone();
+
+        let (unsub_tx, unsub_rx) = tokio::sync::watch::channel(());
+        self.unsubscriber = Some(unsub_tx);
+
+        // channel to send rpc things from the background task to cache updating task
+        // payload: (ClaimStatusPubkey, ClaimStatus)
+        let (update_tx, update_rx) =
+            tokio::sync::mpsc::channel::<(String, DataAndSlot<ClaimStatus>)>(1000);
+
+        self.start_cache_updater(update_rx);
+
+        let rpc_client = RpcClient::new(rpc_url.clone());
+        let distributor_keys_vec = self.get_distributor_keys();
+
+        for distributor in distributor_keys_vec {
+            let gpa_config = RpcProgramAccountsConfig {
+                filters: Some(vec![
+                    RpcFilterType::Memcmp(Memcmp::new(
+                        0,
+                        solana_rpc_client_api::filter::MemcmpEncodedBytes::Bytes(
+                            ClaimStatus::DISCRIMINATOR.into(),
+                        ),
+                    )),
+                    RpcFilterType::Memcmp(Memcmp::new(
+                        73,
+                        solana_rpc_client_api::filter::MemcmpEncodedBytes::Bytes(
+                            distributor.to_bytes().into(),
+                        ),
+                    )),
+                ]),
+                account_config: RpcAccountInfoConfig {
+                    commitment: Some(CommitmentConfig::confirmed()),
+                    encoding: Some(UiAccountEncoding::Base64),
+                    data_slice: None,
+                    min_context_slot: None,
+                },
+                with_context: Some(true),
+            };
+
+            println!("Starting up background updater for {}", distributor);
+            let update_tx = update_tx.clone();
+            let unsub_rx = unsub_rx.clone();
+            let pubsub_client = PubsubClient::new(&ws_url).await.unwrap();
+            self.hydrate_cache_for_config(
+                gpa_config,
+                &rpc_client,
+                pubsub_client,
+                update_tx,
+                unsub_rx,
+            )
+            .await?;
+        }
+
+        self.hydrate_distributors_cache(&rpc_client).await;
 
         Ok(())
     }
