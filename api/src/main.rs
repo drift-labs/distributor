@@ -78,6 +78,12 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             tokio::spawn(async move {
                 let start_single_tree = std::time::Instant::now();
                 let single_tree_path = file.path();
+                if single_tree_path.is_dir() {
+                    return;
+                }
+                if single_tree_path.extension().unwrap() != "json" {
+                    return;
+                }
                 let single_tree = match AirdropMerkleTree::new_from_file(&single_tree_path) {
                     Ok(tree) => tree,
                     Err(e) => {
