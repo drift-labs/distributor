@@ -44,6 +44,9 @@ pub enum ApiError {
 
     #[error("Merkle Distributor not found")]
     MerkleDistributorNotFound(String),
+
+    #[error("Math Error")]
+    MathError(),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -101,6 +104,14 @@ impl IntoResponse for ApiError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Merkle Distributor not found",
+                )
+            }
+
+            ApiError::MathError() => {
+                error!("Math Error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Math Error",
                 )
             }
         };

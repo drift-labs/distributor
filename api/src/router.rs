@@ -31,6 +31,10 @@ use tower_http::{
 use tracing::{info, instrument, warn, Span};
 
 use crate::{cache::Cache, error, error::ApiError, Result};
+
+const START_AMOUNT_PCT_NUM: u64 = 70_000_000;
+const START_AMOUNT_PCT_DENOM: u64 = 100_000_000;
+
 pub struct RouterState {
     pub program_id: Pubkey,
     pub tree: HashMap<Pubkey, (Pubkey, TreeNode)>,
@@ -153,6 +157,8 @@ pub struct EligibilityResp {
     pub claimant: String,
     /// Address of the [MerkleDistributor] the claimant is in
     pub merkle_tree: String,
+    /// Mint of token being distributed
+    pub mint: String,
     /// Claim start time from [MerkleDistributor] (Unix Timestamp)
     pub start_ts: i64,
     /// Claim start time from [MerkleDistributor] (Unix Timestamp)
@@ -189,8 +195,14 @@ async fn get_eligibility(
         merkle_tree: proof.merkle_tree,
         start_ts: distributor.start_ts,
         end_ts: distributor.end_ts,
+        mint: distributor.mint.to_string(),
         proof: proof.proof,
-        start_amount: proof.amount * 70 / 100,
+        start_amount: proof
+            .amount
+            .checked_mul(START_AMOUNT_PCT_NUM)
+            .ok_or(ApiError::MathError())?
+            .checked_div(START_AMOUNT_PCT_DENOM)
+            .ok_or(ApiError::MathError())?,
         end_amount: proof.amount,
         claimed_amount,
     }))
