@@ -144,7 +144,7 @@ export default class MerkleDistributorAPI {
     if (nowTs > u.end_ts) {
       return 0;
     }
-    return Math.floor((u.end_amount * (nowTs - u.start_ts)) / (u.end_ts - u.start_ts) + u.start_amount);
+    return Math.floor(((u.end_amount - u.start_amount) * (nowTs - u.start_ts)) / (u.end_ts - u.start_ts) + u.start_amount);
   }
 
   static deriveClaimStatus(claimant: PublicKey, distributor: PublicKey, programId: PublicKey) {
