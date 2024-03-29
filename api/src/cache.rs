@@ -11,7 +11,7 @@ use futures_util::StreamExt;
 use merkle_distributor::state::{claim_status::ClaimStatus, merkle_distributor::MerkleDistributor};
 use solana_account_decoder::{UiAccountData, UiAccountEncoding};
 use solana_program::pubkey::Pubkey;
-use solana_pubsub_client::nonblocking::pubsub_client::{self, PubsubClient};
+use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{
     config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
@@ -94,7 +94,7 @@ impl Cache {
         &mut self,
         gpa_config: RpcProgramAccountsConfig,
         rpc_client: &RpcClient,
-        pubsub_client: PubsubClient,
+        ws_url: String,
         update_tx: tokio::sync::mpsc::Sender<(String, DataAndSlot<ClaimStatus>)>,
         mut unsub_rx: tokio::sync::watch::Receiver<()>,
     ) -> Result<(), ApiError> {
@@ -110,6 +110,7 @@ impl Cache {
             async move {
                 loop {
                     let gpa_config_clone_2 = gpa_config_clone.clone();
+                    let pubsub_client = PubsubClient::new(ws_url.as_str()).await.unwrap();
                     match pubsub_client
                         .program_subscribe(&program_id, Some(gpa_config_clone_2))
                         .await
@@ -366,15 +367,8 @@ impl Cache {
             println!("Starting up background updater for {}", distributor);
             let update_tx = update_tx.clone();
             let unsub_rx = unsub_rx.clone();
-            let pubsub_client = PubsubClient::new(&ws_url).await.unwrap();
-            self.hydrate_cache_for_config(
-                gpa_config,
-                &rpc_client,
-                pubsub_client,
-                update_tx,
-                unsub_rx,
-            )
-            .await?;
+            self.hydrate_cache_for_config(gpa_config, &rpc_client, ws_url, update_tx, unsub_rx)
+                .await?;
         }
 
         self.hydrate_distributors_cache(&rpc_client).await;
