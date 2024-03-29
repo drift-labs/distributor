@@ -367,8 +367,14 @@ impl Cache {
             println!("Starting up background updater for {}", distributor);
             let update_tx = update_tx.clone();
             let unsub_rx = unsub_rx.clone();
-            self.hydrate_cache_for_config(gpa_config, &rpc_client, ws_url, update_tx, unsub_rx)
-                .await?;
+            self.hydrate_cache_for_config(
+                gpa_config,
+                &rpc_client,
+                ws_url.clone(),
+                update_tx,
+                unsub_rx,
+            )
+            .await?;
         }
 
         self.hydrate_distributors_cache(&rpc_client).await;

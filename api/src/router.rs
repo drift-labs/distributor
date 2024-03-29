@@ -25,6 +25,7 @@ use tower::{
     ServiceBuilder,
 };
 use tower_http::{
+    cors::{Any, CorsLayer},
     trace::{DefaultOnResponse, TraceLayer},
     LatencyUnit,
 };
@@ -71,14 +72,22 @@ pub fn get_routes(state: Arc<RouterState>) -> Router {
                 ),
         );
 
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     let router = Router::new()
         .route("/", get(root))
         .route("/distributors", get(get_distributors))
         .route("/user/:user_pubkey", get(get_user_info))
         .route("/claim/:user_pubkey", get(get_claim_status))
-        .route("/eligibility/:user_pubkey", get(get_eligibility));
+        .route("/eligibility/:user_pubkey", get(get_eligibility))
+        .layer(middleware)
+        .layer(cors)
+        .with_state(state);
 
-    router.layer(middleware).with_state(state)
+    router
 }
 
 fn get_user_proof(
