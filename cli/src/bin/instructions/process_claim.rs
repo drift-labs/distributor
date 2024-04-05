@@ -1,3 +1,4 @@
+use solana_sdk::compute_budget::ComputeBudgetInstruction;
 use crate::*;
 
 pub fn process_claim(args: &Args, claim_args: &ClaimArgs) {
@@ -32,6 +33,18 @@ pub fn process_claim(args: &Args, claim_args: &ClaimArgs) {
 
     let claimant_ata = get_associated_token_address(&claimant, &args.mint);
 
+    let mut ixs = vec![];
+
+    let priority_fee = args.priority.unwrap_or(0);
+    if priority_fee > 0 {
+        let instruction = ComputeBudgetInstruction::set_compute_unit_price(priority_fee);
+        ixs.push(instruction);
+        println!(
+            "Added priority fee instruction of {} microlamports",
+            priority_fee
+        );
+    }
+
     let claim_ix = Instruction {
         program_id: args.program_id,
         accounts: merkle_distributor::accounts::ClaimLocked {
@@ -46,9 +59,11 @@ pub fn process_claim(args: &Args, claim_args: &ClaimArgs) {
         data: merkle_distributor::instruction::ClaimLocked {}.data(),
     };
 
+    ixs.push(claim_ix);
+
     let blockhash = client.get_latest_blockhash().unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[claim_ix],
+        &ixs,
         Some(&claimant.key()),
         &[&keypair],
         blockhash,
