@@ -45,8 +45,8 @@ export interface MerkleDistributorResp {
   totalAmountClaimed: number;
   totalAmountForgone: number;
   numNodesClaimed: number;
-  startTs: number;
-  endTs: number;
+  start_ts: number;
+  end_ts: number;
   clawbackStartTs: number;
   clawbackReceiver: string;
   admin: string;
