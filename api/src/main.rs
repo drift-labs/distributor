@@ -14,6 +14,7 @@ use solana_program::pubkey::Pubkey;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::Mutex;
 use tracing::{info, instrument};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::{cache::Cache, error::ApiError, router::SingleDistributor};
 pub type Result<T> = std::result::Result<T, ApiError>;
@@ -50,7 +51,14 @@ pub struct Args {
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
-    // tracing_subscriber::fmt().init();
+    tracing_subscriber::registry()
+        .with(
+            fmt::Layer::new()
+                .with_writer(std::io::stdout)
+                .event_format(fmt::format().with_line_number(true).with_file(true)),
+        )
+        .with(EnvFilter::from_default_env())
+        .init();
 
     println!("args: {:?}", args);
 

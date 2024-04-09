@@ -112,6 +112,7 @@ impl IntoResponse for ApiError {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Math Error")
             }
         };
+
         (
             status,
             Json(Error {

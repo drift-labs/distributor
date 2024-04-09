@@ -29,12 +29,12 @@ use tower_http::{
     trace::{DefaultOnResponse, TraceLayer},
     LatencyUnit,
 };
-use tracing::{info, instrument, warn, Span};
+use tracing::{error, info, instrument, warn, Span};
 
 use crate::{cache::Cache, error, error::ApiError, Result};
 
-const START_AMOUNT_PCT_NUM: u64 = 70_000_000;
-const START_AMOUNT_PCT_DENOM: u64 = 100_000_000;
+const START_AMOUNT_PCT_NUM: u128 = 70_000_000;
+const START_AMOUNT_PCT_DENOM: u128 = 100_000_000;
 
 pub struct RouterState {
     pub program_id: Pubkey,
@@ -52,7 +52,7 @@ impl Debug for RouterState {
     }
 }
 
-#[instrument]
+#[instrument(level = "error")]
 pub fn get_routes(state: Arc<RouterState>) -> Router {
     let middleware = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(error::handle_error))
@@ -112,7 +112,7 @@ fn get_user_proof(
 }
 
 /// Retrieve the proof for a given user
-#[instrument(ret)]
+#[instrument(level = "error")]
 async fn get_user_info(
     State(state): State<Arc<RouterState>>,
     Path(user_pubkey): Path<String>,
@@ -141,7 +141,7 @@ pub struct ClaimStatusResp {
 }
 
 /// Retrieve the claim status for a user
-#[instrument(ret)]
+#[instrument(level = "error")]
 async fn get_claim_status(
     State(state): State<Arc<RouterState>>,
     Path(user_pubkey): Path<String>,
@@ -175,15 +175,15 @@ pub struct EligibilityResp {
     /// Claimant's proof of inclusion in the Merkle Tree
     pub proof: Vec<[u8; 32]>,
     /// Amount user can claim at the beginning, start_amount = amount * START_PCT
-    pub start_amount: u64,
+    pub start_amount: u128,
     /// Amount user can claim at the end (max bonus)
-    pub end_amount: u64,
+    pub end_amount: u128,
     /// Amount user has claimed, will be 0 if user has not claimed yet
-    pub claimed_amount: u64,
+    pub claimed_amount: u128,
 }
 
 /// Retrieve the claim status for a user
-#[instrument(ret)]
+#[instrument(level = "error")]
 async fn get_eligibility(
     State(state): State<Arc<RouterState>>,
     Path(user_pubkey): Path<String>,
@@ -199,6 +199,26 @@ async fn get_eligibility(
         .map(|r| r.data.unlocked_amount_claimed)
         .unwrap_or(0);
 
+    let start_amount = (proof.amount as u128)
+        .checked_mul(START_AMOUNT_PCT_NUM)
+        .ok_or_else(|| {
+            let err = ApiError::MathError();
+            error!(
+                "Math error occurred, amount: {}, START_AMOUNT_PCT_NUM: {}",
+                proof.amount, START_AMOUNT_PCT_NUM
+            );
+            err
+        })?
+        .checked_div(START_AMOUNT_PCT_DENOM)
+        .ok_or_else(|| {
+            let err = ApiError::MathError();
+            error!(
+                "Math error occurred, amount: {}, START_AMOUNT_PCT_DENOM: {}",
+                proof.amount, START_AMOUNT_PCT_DENOM
+            );
+            err
+        })?;
+
     Ok(Json(EligibilityResp {
         claimant: user_pubkey,
         merkle_tree: proof.merkle_tree,
@@ -206,14 +226,9 @@ async fn get_eligibility(
         end_ts: distributor.end_ts,
         mint: distributor.mint.to_string(),
         proof: proof.proof,
-        start_amount: proof
-            .amount
-            .checked_mul(START_AMOUNT_PCT_NUM)
-            .ok_or(ApiError::MathError())?
-            .checked_div(START_AMOUNT_PCT_DENOM)
-            .ok_or(ApiError::MathError())?,
-        end_amount: proof.amount,
-        claimed_amount,
+        start_amount,
+        end_amount: proof.amount as u128,
+        claimed_amount: claimed_amount as u128,
     }))
 }
 
