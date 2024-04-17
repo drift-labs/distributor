@@ -1,3 +1,4 @@
+use solana_sdk::compute_budget::ComputeBudgetInstruction;
 use crate::*;
 
 pub fn process_new_distributor(args: &Args, new_distributor_args: &NewDistributorArgs) {
@@ -49,6 +50,17 @@ pub fn process_new_distributor(args: &Args, new_distributor_args: &NewDistributo
         }
 
         let mut ixs = vec![];
+
+        let priority_fee = args.priority.unwrap_or(0);
+        if priority_fee > 0 {
+            let instruction = ComputeBudgetInstruction::set_compute_unit_price(priority_fee);
+            ixs.push(instruction);
+            println!(
+                "Added priority fee instruction of {} microlamports",
+                priority_fee
+            );
+        }
+
         let token_vault = spl_associated_token_account::get_associated_token_address(
             &distributor_pubkey,
             &args.mint,
