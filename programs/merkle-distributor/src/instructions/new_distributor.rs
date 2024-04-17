@@ -10,6 +10,11 @@ const SECONDS_PER_HOUR: i64 = 3600; // 60 minutes * 60 seconds
 const HOURS_PER_DAY: i64 = 24;
 const SECONDS_PER_DAY: i64 = SECONDS_PER_HOUR * HOURS_PER_DAY; // 24 hours * 3600 seconds
 
+mod admin {
+    use solana_program::declare_id;
+    declare_id!("Fqo8WncpiP55ExPhuWLzMbm1cuYuJpXjhQPnd8ak3Pyn");
+}
+
 /// Accounts for [merkle_distributor::handle_new_distributor].
 #[derive(Accounts)]
 #[instruction(version: u64)]
@@ -45,7 +50,10 @@ pub struct NewDistributor<'info> {
 
     /// Admin wallet, responsible for creating the distributor and paying for the transaction.
     /// Also has the authority to set the clawback receiver and change itself.
-    #[account(mut)]
+    #[account(
+        mut,
+        address = admin::id()
+    )]
     pub admin: Signer<'info>,
 
     /// The [System] program.
