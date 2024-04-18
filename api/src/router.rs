@@ -52,7 +52,7 @@ impl Debug for RouterState {
     }
 }
 
-#[instrument(level = "error")]
+#[instrument(level = "info")]
 pub fn get_routes(state: Arc<RouterState>) -> Router {
     let middleware = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(error::handle_error))
@@ -67,9 +67,9 @@ pub fn get_routes(state: Arc<RouterState>) -> Router {
                 })
                 .on_response(
                     DefaultOnResponse::new()
-                        .level(tracing_core::Level::ERROR)
+                        .level(tracing_core::Level::INFO)
                         .latency_unit(LatencyUnit::Millis),
-                ),
+                )
         );
 
     let cors = CorsLayer::new()
