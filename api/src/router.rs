@@ -178,8 +178,8 @@ pub struct EligibilityResp {
     pub start_amount: u128,
     /// Amount user can claim at the end (max bonus)
     pub end_amount: u128,
-    /// Amount excess of end_amount that the user has vested
-    pub vested_amount: u128,
+    /// Amount excess of end_amount that is currently locked.
+    pub unvested_amount: u128,
     /// Amount user has claimed, will be 0 if user has not claimed yet
     pub claimed_amount: u128,
 }
@@ -230,7 +230,7 @@ async fn get_eligibility(
         proof: proof.proof,
         start_amount,
         end_amount: proof.amount as u128,
-        vested_amount: state.cache.get_vested_amount(user_pubkey),
+        unvested_amount: state.cache.get_unvested_amount(user_pubkey),
         claimed_amount: claimed_amount as u128,
     }))
 }
