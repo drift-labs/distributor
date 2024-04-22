@@ -31,6 +31,7 @@ futures-util = "0.3.30"
 tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
 dashmap = "5.5.3"
 futures = "0.3.30"
+csv.workspace = true
 
 
 [dev-dependencies]

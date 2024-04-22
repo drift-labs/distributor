@@ -1439,6 +1439,7 @@ dependencies = [
  "assert_matches",
  "axum",
  "clap 3.2.25",
+ "csv",
  "dashmap",
  "futures",
  "futures-util",

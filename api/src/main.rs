@@ -7,6 +7,7 @@ use std::{
 };
 
 use clap::Parser;
+use csv::Reader;
 use futures::future::join_all;
 use jito_merkle_tree::{airdrop_merkle_tree::AirdropMerkleTree, utils::get_merkle_distributor_pda};
 use router::RouterState;
@@ -44,6 +45,10 @@ pub struct Args {
     /// Program ID
     #[clap(long, env)]
     program_id: Pubkey,
+
+    /// Path to csv file of accounts with vested tokens
+    #[clap(long, env)]
+    vested_accounts_path: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -76,7 +81,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let tree = Arc::new(Mutex::new(HashMap::new()));
     let distributors = Arc::new(Mutex::new(vec![]));
     let start_all_trees = std::time::Instant::now();
-    println!("loading {} merkle trees", paths.len());
+    println!("checking {} files for merkle trees", paths.len());
 
     let tasks: Vec<_> = paths
         .into_iter()
@@ -90,6 +95,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     return;
                 }
                 if single_tree_path.extension().unwrap() != "json" {
+                    println!("skipping {}", single_tree_path.display());
                     return;
                 }
                 let single_tree = match AirdropMerkleTree::new_from_file(&single_tree_path) {
@@ -139,7 +145,44 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let duration_all_trees = start_all_trees.elapsed();
     println!("Done loading all trees in {:?}", duration_all_trees);
 
-    let mut cache = Cache::new(args.program_id, distributors.lock().await.clone());
+    let start_vested_users = std::time::Instant::now();
+    let mut vested_users: Option<HashMap<String, u128>> = None;
+    if let Some(vested_accounts_path) = args.vested_accounts_path {
+        let vested_users_file = fs::File::open(vested_accounts_path)?;
+        let vested_users_reader = std::io::BufReader::new(vested_users_file);
+        let mut vested_users_csv = Reader::from_reader(vested_users_reader);
+        let mut vested_users_map = HashMap::new();
+        for record in vested_users_csv.records() {
+            let record = match record {
+                Ok(record) => record,
+                Err(e) => {
+                    eprintln!("Error parsing vested user record: {}", e);
+                    continue;
+                }
+            };
+            let user_pubkey = &record[0].to_string();
+            let vested_amount = &record[1].parse::<u128>().unwrap();
+            vested_users_map
+                .entry(user_pubkey.to_string())
+                .and_modify(|e| *e += *vested_amount)
+                .or_insert(*vested_amount);
+        }
+        vested_users = Some(vested_users_map);
+    } else {
+        println!("No vested accounts path provided");
+    }
+    let duration_vested_users = start_vested_users.elapsed();
+    println!(
+        "Loaded {} vested users in {:?}",
+        vested_users.clone().map_or(0, |m| m.len()),
+        duration_vested_users
+    );
+
+    let mut cache = Cache::new(
+        args.program_id,
+        distributors.lock().await.clone(),
+        vested_users,
+    );
     cache.subscribe(args.rpc_url, args.ws_url).await?;
 
     let state = Arc::new(RouterState {

@@ -69,7 +69,7 @@ pub fn get_routes(state: Arc<RouterState>) -> Router {
                     DefaultOnResponse::new()
                         .level(tracing_core::Level::INFO)
                         .latency_unit(LatencyUnit::Millis),
-                )
+                ),
         );
 
     let cors = CorsLayer::new()
@@ -178,6 +178,8 @@ pub struct EligibilityResp {
     pub start_amount: u128,
     /// Amount user can claim at the end (max bonus)
     pub end_amount: u128,
+    /// Amount excess of end_amount that the user has vested
+    pub vested_amount: u128,
     /// Amount user has claimed, will be 0 if user has not claimed yet
     pub claimed_amount: u128,
 }
@@ -220,7 +222,7 @@ async fn get_eligibility(
         })?;
 
     Ok(Json(EligibilityResp {
-        claimant: user_pubkey,
+        claimant: user_pubkey.clone(),
         merkle_tree: proof.merkle_tree,
         start_ts: distributor.start_ts,
         end_ts: distributor.end_ts,
@@ -228,6 +230,7 @@ async fn get_eligibility(
         proof: proof.proof,
         start_amount,
         end_amount: proof.amount as u128,
+        vested_amount: state.cache.get_vested_amount(user_pubkey),
         claimed_amount: claimed_amount as u128,
     }))
 }

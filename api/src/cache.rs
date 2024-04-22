@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     ops::{Deref, DerefMut},
     str::FromStr,
     sync::Arc,
@@ -53,10 +54,15 @@ pub struct Cache {
     pub subscribed: bool,
     unsubscriber: Option<tokio::sync::watch::Sender<()>>,
     distributors: Vec<SingleDistributor>,
+    vested_users: Option<HashMap<String, u128>>,
 }
 
 impl Cache {
-    pub fn new(program_id: Pubkey, distributors: Vec<SingleDistributor>) -> Self {
+    pub fn new(
+        program_id: Pubkey,
+        distributors: Vec<SingleDistributor>,
+        vested_users: Option<HashMap<String, u128>>,
+    ) -> Self {
         Self {
             claim_status_cache: Arc::new(DashMap::new()),
             distributor_cache: Arc::new(DashMap::new()),
@@ -64,6 +70,7 @@ impl Cache {
             subscribed: false,
             unsubscriber: None,
             distributors,
+            vested_users,
         }
     }
 
@@ -238,6 +245,12 @@ impl Cache {
             .iter()
             .map(|d| Pubkey::from_str(&d.distributor_pubkey).unwrap())
             .collect::<Vec<Pubkey>>()
+    }
+
+    pub fn get_vested_amount(&self, user_pubkey: String) -> u128 {
+        self.vested_users
+            .as_ref()
+            .map_or(0, |m| *(m.get(&user_pubkey).unwrap_or(&0)))
     }
 
     async fn hydrate_distributors_cache(&mut self, rpc_client: &RpcClient) {
