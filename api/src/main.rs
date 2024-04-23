@@ -48,7 +48,16 @@ pub struct Args {
 
     /// Path to csv file of accounts with vested tokens
     #[clap(long, env)]
-    vested_accounts_path: Option<PathBuf>,
+    unvested_accounts_path: Option<PathBuf>,
+
+    /// Decimals to apply to csv at unvested_accounts_path
+    #[clap(long, env)]
+    unvested_accounts_decimals: Option<u32>,
+}
+
+/// Converts a ui amount to a token amount (with decimals)
+fn ui_amount_to_token_amount(amount: u128, decimals: u32) -> u128 {
+    amount * 10u128.checked_pow(decimals).unwrap()
 }
 
 #[tokio::main]
@@ -147,7 +156,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let start_vested_users = std::time::Instant::now();
     let mut vested_users: Option<HashMap<String, u128>> = None;
-    if let Some(vested_accounts_path) = args.vested_accounts_path {
+    if let Some(vested_accounts_path) = args.unvested_accounts_path {
+        let decimals = args.unvested_accounts_decimals.unwrap_or(6);
         let vested_users_file = fs::File::open(vested_accounts_path)?;
         let vested_users_reader = std::io::BufReader::new(vested_users_file);
         let mut vested_users_csv = Reader::from_reader(vested_users_reader);
@@ -161,11 +171,12 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 }
             };
             let user_pubkey = &record[0].to_string();
-            let vested_amount = &record[1].parse::<u128>().unwrap();
+            let vested_amount =
+                ui_amount_to_token_amount(record[1].parse::<u128>().unwrap(), decimals);
             vested_users_map
                 .entry(user_pubkey.to_string())
-                .and_modify(|e| *e += *vested_amount)
-                .or_insert(*vested_amount);
+                .and_modify(|e| *e += vested_amount)
+                .or_insert(vested_amount);
         }
         vested_users = Some(vested_users_map);
     } else {
