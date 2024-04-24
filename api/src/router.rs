@@ -359,7 +359,7 @@ async fn get_distributors(State(state): State<Arc<RouterState>>) -> Result<impl 
 }
 
 async fn root() -> impl IntoResponse {
-    "Dirft Airdrop API"
+    "hey what u doing here"
 }
 
 // #[cfg(test)]
