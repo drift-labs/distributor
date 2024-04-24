@@ -47,6 +47,9 @@ pub enum ApiError {
 
     #[error("Math Error")]
     MathError(),
+
+    #[error("Unauthorized")]
+    Unauthorized(),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -110,6 +113,11 @@ impl IntoResponse for ApiError {
             ApiError::MathError() => {
                 error!("Math Error");
                 (StatusCode::INTERNAL_SERVER_ERROR, "Math Error")
+            }
+
+            ApiError::Unauthorized() => {
+                error!("Unauthorized");
+                (StatusCode::UNAUTHORIZED, "Unauthorized")
             }
         };
 
