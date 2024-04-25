@@ -88,18 +88,25 @@ pub fn get_routes(state: Arc<RouterState>) -> Router {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let mut router = Router::new()
-        .route("/", get(root))
-        .route("/distributors", get(get_distributors))
-        .route("/user/:user_pubkey", get(get_user_info))
-        .route("/claim/:user_pubkey", get(get_claim_status))
-        .route("/eligibility/:user_pubkey", get(get_eligibility));
+    let mut router = Router::new().route("/", get(root));
 
     if state.needs_auth() {
-        router = router.route_layer(ValidateRequestHeaderLayer::basic(
-            state.basic_auth_user.clone().unwrap().as_str(),
-            state.basic_auth_password.clone().unwrap().as_str(),
-        ));
+        let auth_routes = Router::new()
+            .route("/distributors", get(get_distributors))
+            .route("/user/:user_pubkey", get(get_user_info))
+            .route("/claim/:user_pubkey", get(get_claim_status))
+            .route("/eligibility/:user_pubkey", get(get_eligibility))
+            .route_layer(ValidateRequestHeaderLayer::basic(
+                state.basic_auth_user.clone().unwrap().as_str(),
+                state.basic_auth_password.clone().unwrap().as_str(),
+            ));
+        router = router.merge(auth_routes);
+    } else {
+        router = router
+            .route("/distributors", get(get_distributors))
+            .route("/user/:user_pubkey", get(get_user_info))
+            .route("/claim/:user_pubkey", get(get_claim_status))
+            .route("/eligibility/:user_pubkey", get(get_eligibility));
     }
 
     router.layer(middleware).layer(cors).with_state(state)
