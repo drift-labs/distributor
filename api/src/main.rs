@@ -61,6 +61,18 @@ pub struct Args {
     /// basic auth password
     #[clap(long, env)]
     basic_auth_password: Option<String>,
+
+    /// start_ts if no distributor is found
+    #[clap(long, env)]
+    default_start_ts: Option<i64>,
+
+    /// end_ts if no distributor is found
+    #[clap(long, env)]
+    default_end_ts: Option<i64>,
+
+    /// mint if no distributor is found
+    #[clap(long, env)]
+    default_mint: Option<String>,
 }
 
 /// Converts a ui amount to a token amount (with decimals)
@@ -201,6 +213,10 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         args.program_id,
         distributors.lock().await.clone(),
         vested_users,
+        args.default_start_ts.unwrap_or(1715266800),
+        args.default_end_ts.unwrap_or(1731164400),
+        args.default_mint
+            .unwrap_or("EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm".to_string()),
     );
     cache.subscribe(args.rpc_url, args.ws_url).await?;
 

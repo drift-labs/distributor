@@ -214,9 +214,19 @@ async fn get_eligibility(
 ) -> Result<impl IntoResponse> {
     let merkle_tree = &state.tree;
     let proof = get_user_proof(merkle_tree, user_pubkey.clone())?;
-    let distributor = state.cache.get_distributor(&proof.merkle_tree).ok_or(
-        ApiError::MerkleDistributorNotFound(proof.merkle_tree.clone()),
-    )?;
+    let distributor = state.cache.get_distributor(&proof.merkle_tree);
+    let (start_ts, end_ts, mint) = match distributor {
+        Some(distributor) => (
+            distributor.start_ts,
+            distributor.end_ts,
+            distributor.mint.to_string(),
+        ),
+        None => (
+            state.cache.default_start_ts,
+            state.cache.default_end_ts,
+            state.cache.default_mint.clone(),
+        ),
+    };
     let claimed_amount = state
         .cache
         .get_claim_status(&user_pubkey)
@@ -246,9 +256,9 @@ async fn get_eligibility(
     Ok(Json(EligibilityResp {
         claimant: user_pubkey.clone(),
         merkle_tree: proof.merkle_tree,
-        start_ts: distributor.start_ts,
-        end_ts: distributor.end_ts,
-        mint: distributor.mint.to_string(),
+        start_ts,
+        end_ts,
+        mint,
         proof: proof.proof,
         start_amount,
         end_amount: proof.amount as u128,
