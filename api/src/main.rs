@@ -213,10 +213,10 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         args.program_id,
         distributors.lock().await.clone(),
         vested_users,
-        args.default_start_ts.unwrap_or(1715266800),
-        args.default_end_ts.unwrap_or(1731164400),
+        args.default_start_ts.unwrap_or(0),
+        args.default_end_ts.unwrap_or(3133657200),
         args.default_mint
-            .unwrap_or("So11111111111111111111111111111111111111112".to_string()),
+            .unwrap_or("11111111111111111111111111111111".to_string()),
     );
     cache.subscribe(args.rpc_url, args.ws_url).await?;
 
