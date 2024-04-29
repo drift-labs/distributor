@@ -2,12 +2,17 @@
   "name": "@drift-labs/merkle-distributor-sdk",
   "version": "0.0.1",
   "description": "Merkle distributor SDK",
-  "main": "dist/index.js",
+  "main": "src/index.ts",
   "scripts": {
     "build": "rm -rf dist && tsc",
     "example": "yarn run ts-node example/example.ts",
     "prettify:fix": "prettier --write './src/**/*.ts'"
   },
+  "exports": {
+    "import": "./src/index.ts",
+    "require": "./dist/ts-sdk/src/index.js"
+  },
+  "type": "module",
   "files": [
     "dist"
   ],
