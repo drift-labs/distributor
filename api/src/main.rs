@@ -216,7 +216,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         args.default_start_ts.unwrap_or(1715266800),
         args.default_end_ts.unwrap_or(1731164400),
         args.default_mint
-            .unwrap_or("EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm".to_string()),
+            .unwrap_or("So11111111111111111111111111111111111111112".to_string()),
     );
     cache.subscribe(args.rpc_url, args.ws_url).await?;
 
