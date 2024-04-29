@@ -36,7 +36,7 @@ use tracing::{error, info, instrument, warn, Span};
 
 use crate::{cache::Cache, error, error::ApiError, Result};
 
-const START_AMOUNT_PCT_NUM: u128 = 70_000;
+const START_AMOUNT_PCT_NUM: u128 = 50_000;
 const START_AMOUNT_PCT_DENOM: u128 = 100_000;
 
 pub struct RouterState {

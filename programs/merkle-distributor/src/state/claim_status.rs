@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::error::ErrorCode::{ArithmeticError, ClaimingIsNotStarted};
 
-pub const START_CLAIM_PCT: u128 = 700_000; // .7
+pub const START_CLAIM_PCT: u128 = 500_000; // .5
 pub const PCT_PRECISION: u128 = 1_000_000;
 
 /// Holds whether or not a claimant has claimed tokens.
@@ -158,8 +158,8 @@ mod test {
 
         let result = claim_status.update_unlocked_amount_claimed(current_ts, start_ts, end_ts).unwrap();
 
-        assert_eq!(claim_status.unlocked_amount_claimed, 700_000);
-        assert_eq!(claim_status.get_unlocked_amount_forgone(), Ok(300_000));
+        assert_eq!(claim_status.unlocked_amount_claimed, 500_000);
+        assert_eq!(claim_status.get_unlocked_amount_forgone(), Ok(500_000));
 
         let current_ts = 6;
         let start_ts = 1;
@@ -167,8 +167,8 @@ mod test {
 
         let result = claim_status.update_unlocked_amount_claimed(current_ts, start_ts, end_ts).unwrap();
 
-        assert_eq!(claim_status.unlocked_amount_claimed, 850_000);
-        assert_eq!(claim_status.get_unlocked_amount_forgone(), Ok(150_000));
+        assert_eq!(claim_status.unlocked_amount_claimed, 750_000);
+        assert_eq!(claim_status.get_unlocked_amount_forgone(), Ok(250_000));
 
         let current_ts = 11;
         let start_ts = 1;

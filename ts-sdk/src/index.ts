@@ -102,21 +102,33 @@ export interface ClaimIxConfig {
 }
 
 export default class MerkleDistributorAPI {
-  static async getUserProof(baseUrl: string, userPubkey: PublicKey): Promise<UserProof> {
+  static async getUserProof(baseUrl: string, userPubkey: PublicKey, authUsername?: string, authPassword?: string): Promise<UserProof> {
     const url = `${baseUrl}/user/${userPubkey.toBase58()}`;
-    const response = await fetch(url);
+    const headers = new Headers();
+    if (authUsername && authPassword) {
+      headers.set('Authorization', 'Basic ' + btoa(authUsername + ':' + authPassword));
+    }
+    const response = await fetch(url, { headers });
     return (await response.json()) as UserProof;
   }
 
-  static async getClaimStatus(baseUrl: string, userPubkey: PublicKey): Promise<ClaimStatusResp> {
+  static async getClaimStatus(baseUrl: string, userPubkey: PublicKey, authUsername?: string, authPassword?: string): Promise<ClaimStatusResp> {
     const url = `${baseUrl}/claim/${userPubkey.toBase58()}`;
-    const response = await fetch(url);
+    const headers = new Headers();
+    if (authUsername && authPassword) {
+      headers.set('Authorization', 'Basic ' + btoa(authUsername + ':' + authPassword));
+    }
+    const response = await fetch(url, { headers });
     return (await response.json()) as ClaimStatusResp;
   }
 
-  static async getEligibility(baseUrl: string, userPubkey: PublicKey): Promise<EligibilityResp | UserNotFoundResp> {
+  static async getEligibility(baseUrl: string, userPubkey: PublicKey, authUsername?: string, authPassword?: string): Promise<EligibilityResp | UserNotFoundResp> {
     const url = `${baseUrl}/eligibility/${userPubkey.toBase58()}`;
-    const response = await fetch(url);
+    const headers = new Headers();
+    if (authUsername && authPassword) {
+      headers.set('Authorization', 'Basic ' + btoa(authUsername + ':' + authPassword));
+    }
+    const response = await fetch(url, { headers });
     if (response.status === 200) {
       return (await response.json()) as EligibilityResp;
     } else if (response.status === 404) {
@@ -126,9 +138,13 @@ export default class MerkleDistributorAPI {
     }
   }
 
-  static async getDistributors(baseUrl: string): Promise<MerkleDistributorResp[]> {
+  static async getDistributors(baseUrl: string, authUsername?: string, authPassword?: string): Promise<MerkleDistributorResp[]> {
     const url = `${baseUrl}/distributors`;
-    const response = await fetch(url);
+    const headers = new Headers();
+    if (authUsername && authPassword) {
+      headers.set('Authorization', 'Basic ' + btoa(authUsername + ':' + authPassword));
+    }
+    const response = await fetch(url, { headers });
     return (await response.json()) as MerkleDistributorResp[];
   }
 
