@@ -14,6 +14,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
+
 use http::Request;
 use jito_merkle_tree::{airdrop_merkle_tree::UserProof, tree_node::TreeNode};
 use merkle_distributor::state::merkle_distributor::MerkleDistributor;
@@ -27,8 +28,10 @@ use tower::{
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::{DefaultOnResponse, TraceLayer},
+    validate_request::ValidateRequestHeaderLayer,
     LatencyUnit,
 };
+
 use tracing::{error, info, instrument, warn, Span};
 
 use crate::{cache::Cache, error, error::ApiError, Result};
@@ -37,6 +40,8 @@ const START_AMOUNT_PCT_NUM: u128 = 50_000;
 const START_AMOUNT_PCT_DENOM: u128 = 100_000;
 
 pub struct RouterState {
+    pub basic_auth_user: Option<String>,
+    pub basic_auth_password: Option<String>,
     pub program_id: Pubkey,
     pub tree: HashMap<Pubkey, (Pubkey, TreeNode)>,
     pub rpc_client: RpcClient,
@@ -49,6 +54,12 @@ impl Debug for RouterState {
             .field("program_id", &self.program_id)
             .field("tree", &self.tree.len())
             .finish()
+    }
+}
+
+impl RouterState {
+    fn needs_auth(&self) -> bool {
+        self.basic_auth_user.is_some() && self.basic_auth_password.is_some()
     }
 }
 
@@ -77,17 +88,28 @@ pub fn get_routes(state: Arc<RouterState>) -> Router {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let router = Router::new()
-        .route("/", get(root))
-        .route("/distributors", get(get_distributors))
-        .route("/user/:user_pubkey", get(get_user_info))
-        .route("/claim/:user_pubkey", get(get_claim_status))
-        .route("/eligibility/:user_pubkey", get(get_eligibility))
-        .layer(middleware)
-        .layer(cors)
-        .with_state(state);
+    let mut router = Router::new().route("/", get(root));
 
-    router
+    if state.needs_auth() {
+        let auth_routes = Router::new()
+            .route("/distributors", get(get_distributors))
+            .route("/user/:user_pubkey", get(get_user_info))
+            .route("/claim/:user_pubkey", get(get_claim_status))
+            .route("/eligibility/:user_pubkey", get(get_eligibility))
+            .route_layer(ValidateRequestHeaderLayer::basic(
+                state.basic_auth_user.clone().unwrap().as_str(),
+                state.basic_auth_password.clone().unwrap().as_str(),
+            ));
+        router = router.merge(auth_routes);
+    } else {
+        router = router
+            .route("/distributors", get(get_distributors))
+            .route("/user/:user_pubkey", get(get_user_info))
+            .route("/claim/:user_pubkey", get(get_claim_status))
+            .route("/eligibility/:user_pubkey", get(get_eligibility));
+    }
+
+    router.layer(middleware).layer(cors).with_state(state)
 }
 
 fn get_user_proof(
@@ -192,9 +214,19 @@ async fn get_eligibility(
 ) -> Result<impl IntoResponse> {
     let merkle_tree = &state.tree;
     let proof = get_user_proof(merkle_tree, user_pubkey.clone())?;
-    let distributor = state.cache.get_distributor(&proof.merkle_tree).ok_or(
-        ApiError::MerkleDistributorNotFound(proof.merkle_tree.clone()),
-    )?;
+    let distributor = state.cache.get_distributor(&proof.merkle_tree);
+    let (start_ts, end_ts, mint) = match distributor {
+        Some(distributor) => (
+            distributor.start_ts,
+            distributor.end_ts,
+            distributor.mint.to_string(),
+        ),
+        None => (
+            state.cache.default_start_ts,
+            state.cache.default_end_ts,
+            state.cache.default_mint.clone(),
+        ),
+    };
     let claimed_amount = state
         .cache
         .get_claim_status(&user_pubkey)
@@ -224,9 +256,9 @@ async fn get_eligibility(
     Ok(Json(EligibilityResp {
         claimant: user_pubkey.clone(),
         merkle_tree: proof.merkle_tree,
-        start_ts: distributor.start_ts,
-        end_ts: distributor.end_ts,
-        mint: distributor.mint.to_string(),
+        start_ts,
+        end_ts,
+        mint,
         proof: proof.proof,
         start_amount,
         end_amount: proof.amount as u128,
@@ -359,51 +391,5 @@ async fn get_distributors(State(state): State<Arc<RouterState>>) -> Result<impl 
 }
 
 async fn root() -> impl IntoResponse {
-    "Dirft Airdrop API"
+    "hey what u doing here"
 }
-
-// #[cfg(test)]
-// mod router_test {
-//     use std::{collections::HashMap, time, time::Instant};
-
-//     use futures::future::join_all;
-//     use hyper::{Body, Client, Method, Request};
-//     use hyper_tls::HttpsConnector;
-//     use solana_sdk::pubkey::Pubkey;
-
-//     use super::*;
-
-//     #[tokio::test]
-//     async fn test_parallel_request() {
-//         let url = format!("http://localhost:7001/user/1111sU1sYbe2QWn1rNjUFziHmj6R8Xdt7tj2Q2RFaM",);
-
-//         let https = HttpsConnector::new();
-//         let client = Client::builder().build::<_, hyper::Body>(https);
-
-//         let now = time::Instant::now();
-//         let mut handles = vec![];
-//         for _i in 0..10_000 {
-//             handles.push(async {
-//                 let result = client.get(url.parse().unwrap()).await;
-//                 match result {
-//                     Ok(response) => response.status().as_u16() == 200,
-//                     Err(_) => false,
-//                 }
-//             });
-//         }
-//         let outputs = join_all(handles).await;
-
-//         let mut successes = 0u64;
-//         let mut failures = 0u64;
-//         for is_ok in outputs {
-//             if is_ok {
-//                 successes += 1;
-//             } else {
-//                 failures += 1;
-//             }
-//         }
-//         println!("handle all request took {:.2?}", now.elapsed());
-//         println!("success: {}, failures: {}", successes, failures);
-//         assert_eq!(0, failures);
-//     }
-// }

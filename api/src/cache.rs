@@ -55,6 +55,10 @@ pub struct Cache {
     unsubscriber: Option<tokio::sync::watch::Sender<()>>,
     distributors: Vec<SingleDistributor>,
     unvested_users: Option<HashMap<String, u128>>,
+
+    pub default_start_ts: i64,
+    pub default_end_ts: i64,
+    pub default_mint: String,
 }
 
 impl Cache {
@@ -62,6 +66,9 @@ impl Cache {
         program_id: Pubkey,
         distributors: Vec<SingleDistributor>,
         unvested_users: Option<HashMap<String, u128>>,
+        default_start_ts: i64,
+        default_end_ts: i64,
+        default_mint: String,
     ) -> Self {
         Self {
             claim_status_cache: Arc::new(DashMap::new()),
@@ -71,6 +78,9 @@ impl Cache {
             unsubscriber: None,
             distributors,
             unvested_users,
+            default_start_ts,
+            default_end_ts,
+            default_mint,
         }
     }
 

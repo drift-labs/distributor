@@ -53,6 +53,26 @@ pub struct Args {
     /// Decimals to apply to csv at unvested_accounts_path
     #[clap(long, env)]
     unvested_accounts_decimals: Option<u32>,
+
+    /// basic auth user
+    #[clap(long, env)]
+    basic_auth_user: Option<String>,
+
+    /// basic auth password
+    #[clap(long, env)]
+    basic_auth_password: Option<String>,
+
+    /// start_ts if no distributor is found
+    #[clap(long, env)]
+    default_start_ts: Option<i64>,
+
+    /// end_ts if no distributor is found
+    #[clap(long, env)]
+    default_end_ts: Option<i64>,
+
+    /// mint if no distributor is found
+    #[clap(long, env)]
+    default_mint: Option<String>,
 }
 
 /// Converts a ui amount to a token amount (with decimals)
@@ -193,10 +213,16 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         args.program_id,
         distributors.lock().await.clone(),
         vested_users,
+        args.default_start_ts.unwrap_or(0),
+        args.default_end_ts.unwrap_or(3133657200),
+        args.default_mint
+            .unwrap_or("11111111111111111111111111111111".to_string()),
     );
     cache.subscribe(args.rpc_url, args.ws_url).await?;
 
     let state = Arc::new(RouterState {
+        basic_auth_user: args.basic_auth_user.clone(),
+        basic_auth_password: args.basic_auth_password.clone(),
         tree: tree.lock().await.clone(),
         program_id: args.program_id,
         rpc_client,
