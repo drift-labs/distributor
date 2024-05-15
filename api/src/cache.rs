@@ -117,7 +117,6 @@ impl Cache {
         rpc_client: &RpcClient,
         ws_url: String,
         update_tx: tokio::sync::mpsc::Sender<(String, DataAndSlot<ClaimStatus>)>,
-        mut unsub_rx: tokio::sync::watch::Receiver<()>,
     ) -> Result<(), ApiError> {
         let mut attempt = 0;
         let mut unsubscribed = false;
@@ -181,12 +180,12 @@ impl Cache {
                                         }
                                     }
                                 }
-                                _ = unsub_rx.changed() => {
-                                    println!("Cache update loop unsubscribing.");
-                                    unsubscriber().await;
-                                    unsubscribed = true;
-                                    break;
-                                }
+                                // _ = unsub_rx.changed() => {
+                                //     println!("Cache update loop unsubscribing.");
+                                //     unsubscriber().await;
+                                //     unsubscribed = true;
+                                //     break;
+                                // }
                             }
                         },
                         Err(e) => {
@@ -354,9 +353,6 @@ impl Cache {
         let ws_url = ws_url.clone();
         let rpc_url = rpc_url.clone();
 
-        let (unsub_tx, unsub_rx) = tokio::sync::watch::channel(());
-        // self.unsubscriber = Some(unsub_tx);
-
         // channel to send rpc things from the background task to cache updating task
         // payload: (ClaimStatusPubkey, ClaimStatus)
         let (update_tx, update_rx) =
@@ -394,13 +390,11 @@ impl Cache {
 
             println!("Starting up background updater for {}", distributor);
             let update_tx = update_tx.clone();
-            let unsub_rx = unsub_rx.clone();
             self.hydrate_cache_for_config(
                 gpa_config,
                 &rpc_client,
                 ws_url.clone(),
                 update_tx,
-                unsub_rx,
             )
             .await?;
         }
