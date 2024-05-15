@@ -7,14 +7,20 @@ pub fn get_total_claim(args: &Args, total_claim_args: &TotalClaimAgrs) {
     let program = args.get_program_client();
 
     let mut total_node_claimed = 0u64;
+    let mut total_amount_claimed = 0u64;
+    let mut total_amount_forgone = 0u64;
     for i in 0..=total_claim_args.num_tree {
         let (distributor_pubkey, _bump) =
             get_merkle_distributor_pda(&args.program_id, &args.mint, i);
         let distributor: MerkleDistributor = program.account(distributor_pubkey).unwrap();
         total_node_claimed += distributor.num_nodes_claimed;
+        total_amount_claimed += distributor.total_amount_claimed;
+        total_amount_forgone += distributor.total_amount_forgone;
     }
 
     println!("total_node_claimed {}", total_node_claimed);
+    println!("total_amount_claimed {}", total_amount_claimed);
+    println!("total_amount_forgone {}", total_amount_forgone);
 }
 
 pub fn view_claim_status(args: &Args) {
