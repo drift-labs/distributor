@@ -3,6 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 
 use anchor_lang::{AccountDeserialize, Discriminator, __private::base64};
@@ -21,6 +22,8 @@ use solana_rpc_client_api::{
 use solana_sdk::commitment_config::CommitmentConfig;
 
 use crate::{error::ApiError, router::SingleDistributor};
+
+const INTERVAL: Duration = Duration::from_secs(30);
 
 #[derive(Clone)]
 pub struct DataAndSlot<T> {
@@ -42,6 +45,7 @@ impl DerefMut for Cache {
     }
 }
 
+#[derive(Clone)]
 pub struct Cache {
     /// map from claimant to ClaimStatus account;
     claim_status_cache: Arc<DashMap<String, DataAndSlot<ClaimStatus>>>,
@@ -52,7 +56,7 @@ pub struct Cache {
     program_id: Pubkey,
 
     pub subscribed: bool,
-    unsubscriber: Option<tokio::sync::watch::Sender<()>>,
+    // unsubscriber: Option<tokio::sync::watch::Sender<()>>,
     distributors: Vec<SingleDistributor>,
     unvested_users: Option<HashMap<String, u128>>,
 
@@ -75,7 +79,7 @@ impl Cache {
             distributor_cache: Arc::new(DashMap::new()),
             program_id,
             subscribed: false,
-            unsubscriber: None,
+            // unsubscriber: None,
             distributors,
             unvested_users,
             default_start_ts,
@@ -263,7 +267,8 @@ impl Cache {
             .map_or(0, |m| *(m.get(&user_pubkey).unwrap_or(&0)))
     }
 
-    async fn hydrate_distributors_cache(&mut self, rpc_client: &RpcClient) {
+    async fn hydrate_distributors_cache(self: Arc<Self>, rpc_client: &RpcClient) {
+        dbg!("Hydrating distributor cache");
         // hydrate distributor cache
         let distributor_cache = Arc::clone(&self.distributor_cache);
         let distributors_to_load = self.distributors.clone();
@@ -350,7 +355,7 @@ impl Cache {
         let rpc_url = rpc_url.clone();
 
         let (unsub_tx, unsub_rx) = tokio::sync::watch::channel(());
-        self.unsubscriber = Some(unsub_tx);
+        // self.unsubscriber = Some(unsub_tx);
 
         // channel to send rpc things from the background task to cache updating task
         // payload: (ClaimStatusPubkey, ClaimStatus)
@@ -400,7 +405,18 @@ impl Cache {
             .await?;
         }
 
-        self.hydrate_distributors_cache(&rpc_client).await;
+        let arc_self = Arc::new(self.clone());
+        let mut interval = tokio::time::interval(INTERVAL);
+
+        tokio::task::spawn(async move {
+            loop {
+                arc_self
+                    .clone()
+                    .hydrate_distributors_cache(&rpc_client)
+                    .await;
+                interval.tick().await;
+            }
+        });
 
         Ok(())
     }
