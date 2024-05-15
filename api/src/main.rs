@@ -123,7 +123,12 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 if single_tree_path.is_dir() {
                     return;
                 }
-                if single_tree_path.extension().unwrap() != "json" {
+                if let Some(extension) = single_tree_path.extension() {
+                    if extension != "json" {
+                        println!("skipping {}", single_tree_path.display());
+                        return;
+                    }
+                } else {
                     println!("skipping {}", single_tree_path.display());
                     return;
                 }
