@@ -73,6 +73,10 @@ pub struct Args {
     /// mint if no distributor is found
     #[clap(long, env)]
     default_mint: Option<String>,
+
+    /// start_amount pct in whole number (50 for 50%)
+    #[clap(long, env, default_value = "50")]
+    start_amount_pct: String,
 }
 
 /// Converts a ui amount to a token amount (with decimals)
@@ -225,6 +229,11 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     );
     cache.subscribe(args.rpc_url, args.ws_url).await?;
 
+    let start_amount_pct: u128 = args
+        .start_amount_pct
+        .parse()
+        .expect("Invalid start_amount_pct");
+
     let state = Arc::new(RouterState {
         basic_auth_user: args.basic_auth_user.clone(),
         basic_auth_password: args.basic_auth_password.clone(),
@@ -232,6 +241,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         program_id: args.program_id,
         rpc_client,
         cache,
+        start_amount_pct,
     });
 
     let app = router::get_routes(state);

@@ -36,8 +36,8 @@ use tracing::{error, info, instrument, warn, Span};
 
 use crate::{cache::Cache, error, error::ApiError, Result};
 
-const START_AMOUNT_PCT_NUM: u128 = 50_000;
-const START_AMOUNT_PCT_DENOM: u128 = 100_000;
+const START_AMOUNT_PCT_PRECISION: u128 = 1_000;
+const START_AMOUNT_PCT_DENOM: u128 = 100 * START_AMOUNT_PCT_PRECISION;
 
 pub struct RouterState {
     pub basic_auth_user: Option<String>,
@@ -46,6 +46,7 @@ pub struct RouterState {
     pub tree: HashMap<Pubkey, (Pubkey, TreeNode)>,
     pub rpc_client: RpcClient,
     pub cache: Cache,
+    pub start_amount_pct: u128,
 }
 
 impl Debug for RouterState {
@@ -233,13 +234,14 @@ async fn get_eligibility(
         .map(|r| r.data.unlocked_amount_claimed)
         .unwrap_or(0);
 
+    let start_amount_pct_num = state.start_amount_pct * START_AMOUNT_PCT_PRECISION;
     let start_amount = (proof.amount as u128)
-        .checked_mul(START_AMOUNT_PCT_NUM)
+        .checked_mul(start_amount_pct_num)
         .ok_or_else(|| {
             let err = ApiError::MathError();
             error!(
-                "Math error occurred, amount: {}, START_AMOUNT_PCT_NUM: {}",
-                proof.amount, START_AMOUNT_PCT_NUM
+                "Math error occurred (1), amount: {}, START_AMOUNT_PCT_NUM: {}, START_AMOUNT_PCT_DENOM: {}",
+                proof.amount, start_amount_pct_num, START_AMOUNT_PCT_DENOM
             );
             err
         })?
@@ -247,8 +249,8 @@ async fn get_eligibility(
         .ok_or_else(|| {
             let err = ApiError::MathError();
             error!(
-                "Math error occurred, amount: {}, START_AMOUNT_PCT_DENOM: {}",
-                proof.amount, START_AMOUNT_PCT_DENOM
+                "Math error occurred (2), amount: {}, START_AMOUNT_PCT_NUM: {}, START_AMOUNT_PCT_DENOM: {}",
+                proof.amount, start_amount_pct_num, START_AMOUNT_PCT_DENOM
             );
             err
         })?;
