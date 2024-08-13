@@ -123,7 +123,8 @@ fn get_user_proof(
 
     let proof = UserProof {
         merkle_tree: node.0.to_string(),
-        amount: node.1.amount(),
+        amount: node.1.unlocked_amount(),
+        locked_amount: node.1.locked_amount(),
         proof: node
             .1
             .proof

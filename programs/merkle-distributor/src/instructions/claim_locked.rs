@@ -64,9 +64,6 @@ pub struct ClaimLocked<'info> {
 ///     4. The distributor amount claimed is ≤ than the max total claim
 #[allow(clippy::result_large_err)]
 pub fn handle_claim_locked(ctx: Context<ClaimLocked>) -> Result<()> {
-    msg!("not enabled");
-    panic!();
-
     let distributor = &ctx.accounts.distributor;
 
     let claim_status = &mut ctx.accounts.claim_status;

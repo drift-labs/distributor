@@ -13,6 +13,8 @@ pub struct CsvEntry {
     pub pubkey: String,
     /// amount unlocked, (ui amount)
     pub amount: u64,
+    /// amount locked, (ui amount)
+    pub locked_amount: u64,
 }
 
 impl CsvEntry {
