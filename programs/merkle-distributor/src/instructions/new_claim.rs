@@ -134,6 +134,8 @@ pub fn handle_new_claim(
 
     // Seed initial values
     claim_status.claimant = claimant_account.key();
+    claim_status.locked_amount = amount_locked;
+    claim_status.locked_amount_withdrawn = 0;
     claim_status.unlocked_amount = amount_unlocked;
     claim_status.closable = distributor.closable;
     claim_status.distributor = distributor_key;
