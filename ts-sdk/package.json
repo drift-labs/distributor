@@ -5,7 +5,8 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "rm -rf dist && tsc",
-    "example": "yarn run ts-node example/example.ts",
+    "example": "yarn run ts-node example/exampleNewClaim.ts",
+    "exampleLocked": "yarn run ts-node example/exampleClaimLocked.ts",
     "prettify:fix": "prettier --write './src/**/*.ts'"
   },
   "exports": {
