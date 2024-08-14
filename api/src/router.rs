@@ -205,6 +205,8 @@ pub struct EligibilityResp {
     pub unvested_amount: u128,
     /// Amount user has claimed, will be 0 if user has not claimed yet
     pub claimed_amount: u128,
+    /// Amount user has locked
+    pub locked_amount: u128,
 }
 
 /// Retrieve the claim status for a user
@@ -263,6 +265,7 @@ async fn get_eligibility(
         proof: proof.proof,
         start_amount,
         end_amount: proof.amount as u128,
+        locked_amount: proof.locked_amount as u128,
         unvested_amount: state.cache.get_unvested_amount(user_pubkey),
         claimed_amount: claimed_amount as u128,
     }))
