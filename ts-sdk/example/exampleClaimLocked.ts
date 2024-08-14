@@ -5,27 +5,24 @@ import { loadKeypair } from "./utils";
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
 
 const distributorProgramId = new PublicKey("E7HtfkEMhmn9uwL7EFNydcXBWy5WCYN1vFmKKjipEH1x");
-const userWithoutClaim = new PublicKey("2Xz15NfayPmLmhjVuXTzXSF2GgDirJ7jrwFonHFTUTPj");
 const rpc = "https://api.devnet.solana.com";
 
 const claimantKeypairPath = "/path/to/claimant/keypair.json";
 
 const distributorApiUrl = "http://127.0.0.1:7001";
 
+const u = undefined;
+const pw = undefined;
+
 async function main() {
 
     const claimantWallet = new Wallet(loadKeypair(claimantKeypairPath));
 
     // user with airdrop
-    const eligibility = (await MerkleDistributorAPI.getEligibility(distributorApiUrl, claimantWallet.publicKey) as EligibilityResp);
+    const eligibility = await MerkleDistributorAPI.getEligibility(distributorApiUrl, claimantWallet.publicKey, u, pw) as EligibilityResp;
     console.log('');
     console.log("Eligibility with claim:", eligibility);
     console.log(`Amount claimable now: ${MerkleDistributorAPI.calculateClaimableAmount(eligibility)}`);
-
-    // user with no airdrop
-    const eligibilityWithoutClaim = await MerkleDistributorAPI.getEligibility(distributorApiUrl, userWithoutClaim);
-    console.log('');
-    console.log("Eligibility without claim:", eligibilityWithoutClaim);
 
     // can pass in an (AnchorProvider) or (Connection + Wallet)
     console.log('');

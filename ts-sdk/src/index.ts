@@ -30,6 +30,7 @@ export interface EligibilityResp {
   end_amount: number;
   claimed_amount: number;
   unvested_amount: number;
+  locked_amount: number;
 }
 
 export interface UserNotFoundResp {
@@ -138,6 +139,7 @@ export default class MerkleDistributorAPI {
       headers.set('Authorization', 'Basic ' + btoa(authUsername + ':' + authPassword));
     }
     const response = await fetch(url, { headers });
+    console.log(response);
     if (response.status === 200) {
       return (await response.json()) as EligibilityResp;
     } else if (response.status === 404) {
@@ -212,7 +214,7 @@ export default class MerkleDistributorAPI {
     return [
       ...ixs,
       await program.methods
-        .newClaim(new BN(user.end_amount), new BN(0), user.proof as any)
+        .newClaim(new BN(user.end_amount), new BN(user.locked_amount), user.proof as any)
         .accounts({
           claimant,
           claimStatus: claimStatusPubKey,
