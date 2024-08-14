@@ -32,8 +32,15 @@ async function main() {
     console.log("Claiming for user:", eligibility.claimant);
     const connection = new Connection(rpc);
 
-    // Get the claim ixs
-    const claimIxs = await MerkleDistributorAPI.getClaimLockedIxs({
+    // Get the claim ixs first
+    const claimIxs = await MerkleDistributorAPI.getNewClaimIxs({
+        connection,
+        distributorProgramId,
+        claimantWallet,
+        userEligibility: eligibility,
+    });
+    // then add locked amount for user
+    const claimLockedIxs = await MerkleDistributorAPI.getClaimLockedIxs({
         connection,
         distributorProgramId,
         claimantWallet,
@@ -49,6 +56,7 @@ async function main() {
             microLamports: 100,
         }),
         ...claimIxs,
+        ...claimLockedIxs,
     ];
 
     const message = new TransactionMessage({
