@@ -3,7 +3,7 @@ use std::{
     fmt::{Debug, Formatter},
     str::FromStr,
     sync::Arc,
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use axum::{
@@ -207,6 +207,8 @@ pub struct EligibilityResp {
     pub claimed_amount: u128,
     /// Amount user has locked
     pub locked_amount: u128,
+    /// Amount user has unlocked so far
+    pub claimable_amount: u128,
 }
 
 /// Retrieve the claim status for a user
@@ -218,6 +220,11 @@ async fn get_eligibility(
     let merkle_tree = &state.tree;
     let proof = get_user_proof(merkle_tree, user_pubkey.clone())?;
     let distributor = state.cache.get_distributor(&proof.merkle_tree);
+    let curr_ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("epoch time")
+        .as_secs() as i64;
+
     let (start_ts, end_ts, mint) = match distributor {
         Some(distributor) => (
             distributor.start_ts,
@@ -230,11 +237,11 @@ async fn get_eligibility(
             state.cache.default_mint.clone(),
         ),
     };
-    let claimed_amount = state
+    let (claimed_amount, claimable_amount) = state
         .cache
         .get_claim_status(&user_pubkey)
-        .map(|r| r.data.unlocked_amount_claimed)
-        .unwrap_or(0);
+        .map(|r| (r.data.unlocked_amount_claimed, r.data.amount_withdrawable(curr_ts, start_ts, end_ts).unwrap_or(0)))
+        .unwrap_or((0, 0));
 
     let start_amount = (proof.amount as u128)
         .checked_mul(START_AMOUNT_PCT_NUM)
@@ -266,6 +273,7 @@ async fn get_eligibility(
         start_amount,
         end_amount: proof.amount as u128,
         locked_amount: proof.locked_amount as u128,
+        claimable_amount: claimable_amount as u128,
         unvested_amount: state.cache.get_unvested_amount(user_pubkey),
         claimed_amount: claimed_amount as u128,
     }))
