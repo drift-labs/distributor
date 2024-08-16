@@ -99,7 +99,7 @@ pub fn handle_new_distributor(
     );
     // New distributor parameters must all be set in the future
     require!(
-        start_vesting_ts > curr_ts && end_vesting_ts > curr_ts && clawback_start_ts > curr_ts,
+        end_vesting_ts > curr_ts && clawback_start_ts > curr_ts,
         ErrorCode::TimestampsNotInFuture
     );
 
