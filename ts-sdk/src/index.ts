@@ -214,7 +214,7 @@ export default class MerkleDistributorAPI {
     return [
       ...ixs,
       await program.methods
-        .newClaim(new BN(user.end_amount), new BN(0), user.proof as any)
+        .newClaim(new BN(user.end_amount), new BN(user.locked_amount), user.proof as any)
         .accounts({
           claimant,
           claimStatus: claimStatusPubKey,
