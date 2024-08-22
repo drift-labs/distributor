@@ -32,6 +32,8 @@ export interface EligibilityResp {
   unvested_amount: number;
   locked_amount: number;
   claimable_amount: number;
+  unlocked_amount_claimed: number;
+  locked_amount_withdrawn: number;
 }
 
 export interface UserNotFoundResp {

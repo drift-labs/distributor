@@ -203,8 +203,12 @@ pub struct EligibilityResp {
     pub end_amount: u128,
     /// Amount excess of end_amount that is currently locked.
     pub unvested_amount: u128,
-    /// Amount user has claimed, will be 0 if user has not claimed yet
+    /// Amount user has claimed, will be 0 if user has not claimed yet, this is the sum of unlocked_amount_claimed and locked_amount_withdrawn
     pub claimed_amount: u128,
+    /// Amount user claimed out of their unlocked portion
+    pub unlocked_amount_claimed: u128,
+    /// Amount user claimed out of their locked portion
+    pub locked_amount_withdrawn: u128,
     /// Amount user has locked
     pub locked_amount: u128,
     /// Amount user has unlocked so far
@@ -237,11 +241,19 @@ async fn get_eligibility(
             state.cache.default_mint.clone(),
         ),
     };
-    let (claimed_amount, claimable_amount) = state
+    let (unlocked_amount_claimed, locked_amount_withdrawn, claimable_amount) = state
         .cache
         .get_claim_status(&user_pubkey)
-        .map(|r| (r.data.unlocked_amount_claimed, r.data.amount_withdrawable(curr_ts, start_ts, end_ts).unwrap_or(0)))
-        .unwrap_or((0, 0));
+        .map(|r| {
+            (
+                r.data.unlocked_amount_claimed,
+                r.data.locked_amount_withdrawn,
+                r.data
+                    .amount_withdrawable(curr_ts, start_ts, end_ts)
+                    .unwrap_or(0),
+            )
+        })
+        .unwrap_or((0, 0, 0));
 
     let start_amount = (proof.amount as u128)
         .checked_mul(START_AMOUNT_PCT_NUM)
@@ -275,7 +287,9 @@ async fn get_eligibility(
         locked_amount: proof.locked_amount as u128,
         claimable_amount: claimable_amount as u128,
         unvested_amount: state.cache.get_unvested_amount(user_pubkey),
-        claimed_amount: claimed_amount as u128,
+        claimed_amount: (unlocked_amount_claimed + locked_amount_withdrawn) as u128,
+        unlocked_amount_claimed: unlocked_amount_claimed as u128,
+        locked_amount_withdrawn: locked_amount_withdrawn as u128,
     }))
 }
 
