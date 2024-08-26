@@ -13,6 +13,8 @@ pub struct TreeNode {
     pub claimant: Pubkey,
     /// Amount that claimant can claim
     pub amount: u64,
+    /// Locked amount
+    pub locked_amount: u64,
     /// Claimant's proof of inclusion in the Merkle Tree
     pub proof: Option<Vec<[u8; 32]>>,
 }
@@ -22,13 +24,23 @@ impl TreeNode {
         hashv(&[
             &self.claimant.to_bytes(),
             &self.amount.to_le_bytes(),
-            &0u64.to_le_bytes(),
+            &self.locked_amount.to_le_bytes(),
         ])
     }
 
+    /// Return total amount for this claimant
+    pub fn total_amount(&self) -> u64 {
+        self.amount.checked_add(self.locked_amount).unwrap()
+    }
+
     /// Return amount for this claimant
-    pub fn amount(&self) -> u64 {
+    pub fn unlocked_amount(&self) -> u64 {
         self.amount
+    }
+
+    /// Return locked amount for this claimant
+    pub fn locked_amount(&self) -> u64 {
+        self.locked_amount
     }
 }
 
@@ -42,6 +54,7 @@ impl TreeNode {
         let node = Self {
             claimant: Pubkey::from_str(entry.pubkey.as_str()).unwrap(),
             amount: ui_amount_to_token_amount(entry.amount, decimals),
+            locked_amount: ui_amount_to_token_amount(entry.locked_amount, decimals),
             proof: None,
         };
         node

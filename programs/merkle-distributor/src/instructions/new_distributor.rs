@@ -12,7 +12,10 @@ const SECONDS_PER_DAY: i64 = SECONDS_PER_HOUR * HOURS_PER_DAY; // 24 hours * 360
 
 mod admin {
     use solana_program::declare_id;
+    #[cfg(feature = "mainnet-beta")]
     declare_id!("2xN6e9Z7qT6KPAWSMNKt2WPDbeCcSDADdXqUXsh3UVfK");
+    #[cfg(not(feature = "mainnet-beta"))]
+    declare_id!("E7iAhFMa9KvwhJtaPpoqJE4wPZb16zj2Az7PM9YdWK15");
 }
 
 /// Accounts for [merkle_distributor::handle_new_distributor].
@@ -96,7 +99,7 @@ pub fn handle_new_distributor(
     );
     // New distributor parameters must all be set in the future
     require!(
-        start_vesting_ts > curr_ts && end_vesting_ts > curr_ts && clawback_start_ts > curr_ts,
+        end_vesting_ts > curr_ts && clawback_start_ts > curr_ts,
         ErrorCode::TimestampsNotInFuture
     );
 

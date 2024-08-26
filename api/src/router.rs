@@ -3,7 +3,7 @@ use std::{
     fmt::{Debug, Formatter},
     str::FromStr,
     sync::Arc,
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use axum::{
@@ -124,7 +124,8 @@ fn get_user_proof(
 
     let proof = UserProof {
         merkle_tree: node.0.to_string(),
-        amount: node.1.amount(),
+        amount: node.1.unlocked_amount(),
+        locked_amount: node.1.locked_amount(),
         proof: node
             .1
             .proof
@@ -203,8 +204,16 @@ pub struct EligibilityResp {
     pub end_amount: u128,
     /// Amount excess of end_amount that is currently locked.
     pub unvested_amount: u128,
-    /// Amount user has claimed, will be 0 if user has not claimed yet
+    /// Amount user has claimed, will be 0 if user has not claimed yet, this is the sum of unlocked_amount_claimed and locked_amount_withdrawn
     pub claimed_amount: u128,
+    /// Amount user claimed out of their unlocked portion
+    pub unlocked_amount_claimed: u128,
+    /// Amount user claimed out of their locked portion
+    pub locked_amount_withdrawn: u128,
+    /// Amount user has locked
+    pub locked_amount: u128,
+    /// Amount user has unlocked so far
+    pub claimable_amount: u128,
 }
 
 /// Retrieve the claim status for a user
@@ -216,6 +225,11 @@ async fn get_eligibility(
     let merkle_tree = &state.tree;
     let proof = get_user_proof(merkle_tree, user_pubkey.clone())?;
     let distributor = state.cache.get_distributor(&proof.merkle_tree);
+    let curr_ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("epoch time")
+        .as_secs() as i64;
+
     let (start_ts, end_ts, mint) = match distributor {
         Some(distributor) => (
             distributor.start_ts,
@@ -228,11 +242,19 @@ async fn get_eligibility(
             state.cache.default_mint.clone(),
         ),
     };
-    let claimed_amount = state
+    let (unlocked_amount_claimed, locked_amount_withdrawn, claimable_amount) = state
         .cache
         .get_claim_status(&user_pubkey)
-        .map(|r| r.data.unlocked_amount_claimed)
-        .unwrap_or(0);
+        .map(|r| {
+            (
+                r.data.unlocked_amount_claimed,
+                r.data.locked_amount_withdrawn,
+                r.data
+                    .amount_withdrawable(curr_ts, start_ts, end_ts)
+                    .unwrap_or(0),
+            )
+        })
+        .unwrap_or((0, 0, 0));
 
     let start_amount_pct_num = state.start_amount_pct * START_AMOUNT_PCT_PRECISION;
     let start_amount = (proof.amount as u128)
@@ -264,8 +286,12 @@ async fn get_eligibility(
         proof: proof.proof,
         start_amount,
         end_amount: proof.amount as u128,
+        locked_amount: proof.locked_amount as u128,
+        claimable_amount: claimable_amount as u128,
         unvested_amount: state.cache.get_unvested_amount(user_pubkey),
-        claimed_amount: claimed_amount as u128,
+        claimed_amount: (unlocked_amount_claimed + locked_amount_withdrawn) as u128,
+        unlocked_amount_claimed: unlocked_amount_claimed as u128,
+        locked_amount_withdrawn: locked_amount_withdrawn as u128,
     }))
 }
 

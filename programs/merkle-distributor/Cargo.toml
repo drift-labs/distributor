@@ -1,6 +1,6 @@
 [package]
 name = "merkle-distributor"
-version = "0.0.1"
+version = "0.0.2"
 description = "A Solana program for distributing tokens according to a Merkle root."
 edition = "2021"
 license = "GPL-3.0"
@@ -14,7 +14,8 @@ path = "src/lib.rs"
 no-entrypoint = []
 no-idl = []
 cpi = ["no-entrypoint"]
-default = []
+default = ["mainnet-beta"]
+mainnet-beta = []
 
 [dependencies]
 anchor-lang = "0.28.0"

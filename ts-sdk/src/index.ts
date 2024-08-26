@@ -30,6 +30,10 @@ export interface EligibilityResp {
   end_amount: number;
   claimed_amount: number;
   unvested_amount: number;
+  locked_amount: number;
+  claimable_amount: number;
+  unlocked_amount_claimed: number;
+  locked_amount_withdrawn: number;
 }
 
 export interface UserNotFoundResp {
@@ -93,6 +97,15 @@ export const getOrCreateATAInstruction = async (
 };
 
 export interface ClaimIxConfig {
+  connection?: Connection;
+  claimantWallet?: Wallet;
+  provider?: AnchorProvider;
+
+  distributorProgramId: PublicKey;
+  userEligibility: EligibilityResp;
+}
+
+export interface ClaimLockedIxConfig {
   connection?: Connection;
   claimantWallet?: Wallet;
   provider?: AnchorProvider;
@@ -203,7 +216,7 @@ export default class MerkleDistributorAPI {
     return [
       ...ixs,
       await program.methods
-        .newClaim(new BN(user.end_amount), new BN(0), user.proof as any)
+        .newClaim(new BN(user.end_amount), new BN(user.locked_amount), user.proof as any)
         .accounts({
           claimant,
           claimStatus: claimStatusPubKey,
@@ -212,6 +225,51 @@ export default class MerkleDistributorAPI {
           to: toATA,
           systemProgram: SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .instruction(),
+    ];
+  }
+
+  static async getClaimLockedIxs(config: ClaimLockedIxConfig): Promise<TransactionInstruction[]> {
+    let provider = config.provider;
+    if (!provider && config.connection && config.claimantWallet) {
+      provider = new AnchorProvider(config.connection, config.claimantWallet, {});
+    } else if (!provider) {
+      throw new Error('Must provide either an AnchorProvider or Connection and Wallet');
+    }
+
+    const program = new Program<MerkleDistributor>(IDL, config.distributorProgramId, provider);
+
+    const user = config.userEligibility;
+    const claimant = new PublicKey(user.claimant);
+    const distributor = new PublicKey(user.merkle_tree);
+    const mint = new PublicKey(user.mint);
+
+    const [claimStatusPubKey, _] = MerkleDistributorAPI.deriveClaimStatus(
+      claimant,
+      distributor,
+      config.distributorProgramId,
+    );
+
+    const ixs: TransactionInstruction[] = [];
+
+    const [toATA, toATAIx] = await getOrCreateATAInstruction(mint, claimant, provider.connection, true, claimant);
+    toATAIx && ixs.push(toATAIx);
+
+    const [mdATA, mdATAIx] = await getOrCreateATAInstruction(mint, distributor, provider.connection, true, claimant);
+    mdATAIx && ixs.push(mdATAIx);
+
+    return [
+      ...ixs,
+      await program.methods
+        .claimLocked()
+        .accounts({
+          claimant, //
+          claimStatus: claimStatusPubKey, //
+          distributor, //
+          from: mdATA, //
+          to: toATA, //
+          tokenProgram: TOKEN_PROGRAM_ID, //
         })
         .instruction(),
     ];
