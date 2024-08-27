@@ -14,7 +14,7 @@ pub struct CsvEntry {
     /// amount unlocked, (ui amount)
     pub amount: u64,
     /// amount locked, (ui amount)
-    pub locked_amount: u64,
+    pub locked_amount: Option<u64>,
 }
 
 impl CsvEntry {
