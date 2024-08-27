@@ -45,6 +45,7 @@ async function main() {
         distributorProgramId,
         claimantWallet,
         userEligibility: eligibility,
+        ignoreTokenAccountCreation: true,
     });
 
     // build tx to send

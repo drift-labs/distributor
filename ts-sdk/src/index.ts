@@ -103,6 +103,7 @@ export interface ClaimIxConfig {
 
   distributorProgramId: PublicKey;
   userEligibility: EligibilityResp;
+  ignoreTokenAccountCreation?: boolean;
 }
 
 export interface ClaimLockedIxConfig {
@@ -112,10 +113,16 @@ export interface ClaimLockedIxConfig {
 
   distributorProgramId: PublicKey;
   userEligibility: EligibilityResp;
+  ignoreTokenAccountCreation?: boolean;
 }
 
 export default class MerkleDistributorAPI {
-  static async getUserProof(baseUrl: string, userPubkey: PublicKey, authUsername?: string, authPassword?: string): Promise<UserProof> {
+  static async getUserProof(
+    baseUrl: string,
+    userPubkey: PublicKey,
+    authUsername?: string,
+    authPassword?: string,
+  ): Promise<UserProof> {
     const url = `${baseUrl}/user/${userPubkey.toBase58()}`;
     const headers = new Headers();
     if (authUsername && authPassword) {
@@ -125,7 +132,12 @@ export default class MerkleDistributorAPI {
     return (await response.json()) as UserProof;
   }
 
-  static async getClaimStatus(baseUrl: string, userPubkey: PublicKey, authUsername?: string, authPassword?: string): Promise<ClaimStatusResp> {
+  static async getClaimStatus(
+    baseUrl: string,
+    userPubkey: PublicKey,
+    authUsername?: string,
+    authPassword?: string,
+  ): Promise<ClaimStatusResp> {
     const url = `${baseUrl}/claim/${userPubkey.toBase58()}`;
     const headers = new Headers();
     if (authUsername && authPassword) {
@@ -135,7 +147,12 @@ export default class MerkleDistributorAPI {
     return (await response.json()) as ClaimStatusResp;
   }
 
-  static async getEligibility(baseUrl: string, userPubkey: PublicKey, authUsername?: string, authPassword?: string): Promise<EligibilityResp | UserNotFoundResp> {
+  static async getEligibility(
+    baseUrl: string,
+    userPubkey: PublicKey,
+    authUsername?: string,
+    authPassword?: string,
+  ): Promise<EligibilityResp | UserNotFoundResp> {
     const url = `${baseUrl}/eligibility/${userPubkey.toBase58()}`;
     const headers = new Headers();
     if (authUsername && authPassword) {
@@ -151,7 +168,11 @@ export default class MerkleDistributorAPI {
     }
   }
 
-  static async getDistributors(baseUrl: string, authUsername?: string, authPassword?: string): Promise<MerkleDistributorResp[]> {
+  static async getDistributors(
+    baseUrl: string,
+    authUsername?: string,
+    authPassword?: string,
+  ): Promise<MerkleDistributorResp[]> {
     const url = `${baseUrl}/distributors`;
     const headers = new Headers();
     if (authUsername && authPassword) {
@@ -174,7 +195,9 @@ export default class MerkleDistributorAPI {
     if (nowTs > u.end_ts) {
       return 0;
     }
-    return Math.floor(((u.end_amount - u.start_amount) * (nowTs - u.start_ts)) / (u.end_ts - u.start_ts) + u.start_amount);
+    return Math.floor(
+      ((u.end_amount - u.start_amount) * (nowTs - u.start_ts)) / (u.end_ts - u.start_ts) + u.start_amount,
+    );
   }
 
   static deriveClaimStatus(claimant: PublicKey, distributor: PublicKey, programId: PublicKey) {
@@ -208,10 +231,14 @@ export default class MerkleDistributorAPI {
     const ixs: TransactionInstruction[] = [];
 
     const [toATA, toATAIx] = await getOrCreateATAInstruction(mint, claimant, provider.connection, true, claimant);
-    toATAIx && ixs.push(toATAIx);
-
     const [mdATA, mdATAIx] = await getOrCreateATAInstruction(mint, distributor, provider.connection, true, claimant);
-    mdATAIx && ixs.push(mdATAIx);
+
+    if (toATAIx && !config.ignoreTokenAccountCreation) {
+      ixs.push(toATAIx);
+    }
+    if (mdATAIx && !config.ignoreTokenAccountCreation) {
+      ixs.push(mdATAIx);
+    }
 
     return [
       ...ixs,
@@ -254,10 +281,14 @@ export default class MerkleDistributorAPI {
     const ixs: TransactionInstruction[] = [];
 
     const [toATA, toATAIx] = await getOrCreateATAInstruction(mint, claimant, provider.connection, true, claimant);
-    toATAIx && ixs.push(toATAIx);
-
     const [mdATA, mdATAIx] = await getOrCreateATAInstruction(mint, distributor, provider.connection, true, claimant);
-    mdATAIx && ixs.push(mdATAIx);
+
+    if (toATAIx && !config.ignoreTokenAccountCreation) {
+      ixs.push(toATAIx);
+    }
+    if (mdATAIx && !config.ignoreTokenAccountCreation) {
+      ixs.push(mdATAIx);
+    }
 
     return [
       ...ixs,
