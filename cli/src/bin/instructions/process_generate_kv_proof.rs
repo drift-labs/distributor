@@ -9,7 +9,7 @@ use crate::*;
 pub struct KvProof {
     pub merkle_tree: String,
     pub amount: u64,
-    pub locked_amount: u64,
+    pub locked_amount: Option<u64>,
     /// Claimant's proof of inclusion in the Merkle Tree
     pub proof: Vec<[u8; 32]>,
 }

@@ -68,7 +68,7 @@ mod tests {
         TreeNode {
             claimant,
             amount,
-            locked_amount,
+            locked_amount: Some(locked_amount),
             proof: None,
         }
     }
