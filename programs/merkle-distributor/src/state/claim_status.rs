@@ -10,19 +10,31 @@ pub const PCT_PRECISION: u128 = 1_000_000;
 #[derive(Default)]
 pub struct ClaimStatus {
     /// Authority that claimed the tokens.
-    pub claimant: Pubkey,
-    /// Locked amount  
-    pub locked_amount: u64,
+    pub claimant: Pubkey, // 32
+    /// Locked amount
+    pub locked_amount: u64, // 8
     /// Locked amount withdrawn
-    pub locked_amount_withdrawn: u64,
+    pub locked_amount_withdrawn: u64, // 8
     /// Unlocked amount
-    pub unlocked_amount: u64,
+    pub unlocked_amount: u64, // 8
     /// Unlocked amount claimed
-    pub unlocked_amount_claimed: u64,
+    pub unlocked_amount_claimed: u64, // 8
     /// indicate that whether admin can close this account, for testing purpose
-    pub closable: bool,
+    pub closable: bool, // 1
     /// admin of merkle tree, store for for testing purpose
     pub distributor: Pubkey,
+}
+
+impl PartialEq for ClaimStatus {
+    fn eq(&self, other: &Self) -> bool {
+        self.claimant == other.claimant
+            && self.locked_amount == other.locked_amount
+            && self.locked_amount_withdrawn == other.locked_amount_withdrawn
+            && self.unlocked_amount == other.unlocked_amount
+            && self.unlocked_amount_claimed == other.unlocked_amount_claimed
+            && self.closable == other.closable
+            && self.distributor == other.distributor
+    }
 }
 
 impl ClaimStatus {
@@ -41,7 +53,7 @@ impl ClaimStatus {
     }
 
     /// Total amount unlocked
-    /// Equal to (time_into_unlock / total_unlock_time) * locked_amount  
+    /// Equal to (time_into_unlock / total_unlock_time) * locked_amount
     /// Multiplication safety:
     ///    The maximum possible product is (2^64 -1) * (2^64 -1) = 2^128 - 2^65 + 1
     ///    which is less than 2^128 - 1 (the maximum value of a u128), meaning that
@@ -126,7 +138,6 @@ impl ClaimStatus {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use crate::error::ErrorCode::ClaimingIsNotStarted;
@@ -136,7 +147,7 @@ mod test {
     fn update_unlocked_amount_claimed() {
         let mut claim_status = ClaimStatus {
             unlocked_amount: 1_000_000,
-          ..ClaimStatus::default()
+            ..ClaimStatus::default()
         };
 
         let current_ts = 0;
@@ -156,7 +167,9 @@ mod test {
         let start_ts = 1;
         let end_ts = 11;
 
-        let result = claim_status.update_unlocked_amount_claimed(current_ts, start_ts, end_ts).unwrap();
+        let result = claim_status
+            .update_unlocked_amount_claimed(current_ts, start_ts, end_ts)
+            .unwrap();
 
         assert_eq!(claim_status.unlocked_amount_claimed, 500_000);
         assert_eq!(claim_status.get_unlocked_amount_forgone(), Ok(500_000));
@@ -165,7 +178,9 @@ mod test {
         let start_ts = 1;
         let end_ts = 11;
 
-        let result = claim_status.update_unlocked_amount_claimed(current_ts, start_ts, end_ts).unwrap();
+        let result = claim_status
+            .update_unlocked_amount_claimed(current_ts, start_ts, end_ts)
+            .unwrap();
 
         assert_eq!(claim_status.unlocked_amount_claimed, 750_000);
         assert_eq!(claim_status.get_unlocked_amount_forgone(), Ok(250_000));
@@ -174,7 +189,9 @@ mod test {
         let start_ts = 1;
         let end_ts = 11;
 
-        let result = claim_status.update_unlocked_amount_claimed(current_ts, start_ts, end_ts).unwrap();
+        let result = claim_status
+            .update_unlocked_amount_claimed(current_ts, start_ts, end_ts)
+            .unwrap();
 
         assert_eq!(claim_status.unlocked_amount_claimed, 1_000_000);
         assert_eq!(claim_status.get_unlocked_amount_forgone(), Ok(0));
@@ -183,7 +200,9 @@ mod test {
         let start_ts = 1;
         let end_ts = 11;
 
-        let result = claim_status.update_unlocked_amount_claimed(current_ts, start_ts, end_ts).unwrap();
+        let result = claim_status
+            .update_unlocked_amount_claimed(current_ts, start_ts, end_ts)
+            .unwrap();
 
         assert_eq!(claim_status.unlocked_amount_claimed, 1_000_000);
         assert_eq!(claim_status.get_unlocked_amount_forgone(), Ok(0));

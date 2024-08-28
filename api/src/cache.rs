@@ -7,7 +7,7 @@ use std::{
 };
 
 use anchor_lang::{AccountDeserialize, Discriminator, __private::base64};
-use dashmap::DashMap;
+use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future::join_all;
 use futures_util::StreamExt;
 use merkle_distributor::state::{claim_status::ClaimStatus, merkle_distributor::MerkleDistributor};
@@ -114,7 +114,7 @@ impl Cache {
     async fn hydrate_cache_for_config(
         &mut self,
         gpa_config: RpcProgramAccountsConfig,
-        rpc_client: &RpcClient,
+        rpc_url: String,
         ws_url: String,
         update_tx: tokio::sync::mpsc::Sender<(String, DataAndSlot<ClaimStatus>)>,
     ) -> Result<(), ApiError> {
@@ -214,41 +214,52 @@ impl Cache {
             }
         });
 
+        // let arc_self = Arc::new(self.clone());
+        let mut interval = tokio::time::interval(INTERVAL);
         let update_tx_clone = update_tx.clone();
-        match rpc_client
-            .get_program_accounts_with_config(&program_id, gpa_config)
-            .await
-        {
-            Ok(accounts) => {
-                let start_time = std::time::Instant::now();
-                let total_accounts = accounts.len();
-                let tasks: Vec<_> = accounts
-                    .into_iter()
-                    .map(|(pubkey, account)| {
-                        let update_tx_clone = update_tx_clone.clone();
-                        tokio::spawn(async move {
-                            let data = ClaimStatus::try_deserialize(&mut account.data.as_slice())
-                                .map_err(|err| ApiError::InternalError(Box::new(err)))
-                                .unwrap();
-                            update_tx_clone
-                                .send((pubkey.to_string(), DataAndSlot { data, slot: 0 }))
-                                .await
-                                .unwrap();
-                        })
-                    })
-                    .collect();
 
-                join_all(tasks).await;
-                let total_duration = start_time.elapsed();
-                println!(
-                    "Total deserialization time for {} accounts: {:?}",
-                    total_accounts, total_duration
-                );
+        tokio::task::spawn(async move {
+            loop {
+                let rpc_client = RpcClient::new(rpc_url.clone());
+                let gpa_config_clone = gpa_config.clone();
+                match rpc_client
+                    .get_program_accounts_with_config(&program_id, gpa_config_clone)
+                    .await
+                {
+                    Ok(accounts) => {
+                        let start_time = std::time::Instant::now();
+                        let total_accounts = accounts.len();
+                        let tasks: Vec<_> = accounts
+                            .into_iter()
+                            .map(|(pubkey, account)| {
+                                let update_tx_clone = update_tx_clone.clone();
+                                tokio::spawn(async move {
+                                    let data =
+                                        ClaimStatus::try_deserialize(&mut account.data.as_slice())
+                                            .map_err(|err| ApiError::InternalError(Box::new(err)))
+                                            .unwrap();
+                                    update_tx_clone
+                                        .send((pubkey.to_string(), DataAndSlot { data, slot: 0 }))
+                                        .await
+                                        .unwrap();
+                                })
+                            })
+                            .collect();
+
+                        join_all(tasks).await;
+                        let total_duration = start_time.elapsed();
+                        println!(
+                            "Total deserialization time for {} ClaimStatus accounts: {:?}",
+                            total_accounts, total_duration
+                        );
+                    }
+                    Err(e) => {
+                        println!("Error in gpa_resp: {:?}", e);
+                    }
+                };
+                interval.tick().await;
             }
-            Err(e) => {
-                println!("Error in gpa_resp: {:?}", e);
-            }
-        };
+        });
 
         Ok(())
     }
@@ -267,7 +278,7 @@ impl Cache {
     }
 
     async fn hydrate_distributors_cache(self: Arc<Self>, rpc_client: &RpcClient) {
-        dbg!("Hydrating distributor cache");
+        // dbg!("Hydrating distributor cache");
         // hydrate distributor cache
         let distributor_cache = Arc::clone(&self.distributor_cache);
         let distributors_to_load = self.distributors.clone();
@@ -278,6 +289,10 @@ impl Cache {
             .await
         {
             Ok(accounts) => {
+                println!(
+                    "Hydrating distributor cache ({} accounts)",
+                    accounts.value.len()
+                );
                 for (index, account) in accounts.value.into_iter().enumerate() {
                     let distributor = distributors_to_load.get(index).unwrap();
                     match account {
@@ -313,16 +328,20 @@ impl Cache {
         let cache_clone = Arc::clone(&self.claim_status_cache);
         tokio::spawn(async move {
             while let Some((pubkey, data)) = update_rx.recv().await {
-                match cache_clone.get(&pubkey) {
-                    Some(current) => {
-                        if current.slot <= data.slot {
+                match cache_clone.entry(data.data.claimant.to_string()) {
+                    Entry::Occupied(mut entry) => {
+                        if entry.get().data == data.data {
+                            // println!("Data is the same as what's in cache");
+                            continue;
+                        }
+                        if entry.get().slot <= data.slot {
                             println!(
                                 "Updating cache with newer slot for claimant: {} ({}) on {} tree",
                                 data.data.claimant.to_string(),
                                 pubkey,
                                 data.data.distributor.to_string()
                             );
-                            cache_clone.insert(data.data.claimant.to_string(), data);
+                            entry.insert(data);
                         } else {
                             println!(
                                 "Got an update with older slot than what's in cache for claimant: {} ({}) on {} tree",
@@ -332,14 +351,14 @@ impl Cache {
                             );
                         }
                     }
-                    None => {
+                    Entry::Vacant(entry) => {
                         println!(
-                            "Inserting new data into cache for claimant: {} ({}) on {} tree",
-                            data.data.claimant.to_string(),
+                            "Inserting new ClaimStatus. {}, Claimant: {}, Tree: {}",
                             pubkey,
+                            data.data.claimant.to_string(),
                             data.data.distributor.to_string()
                         );
-                        cache_clone.insert(data.data.claimant.to_string(), data);
+                        entry.insert(data);
                     }
                 };
             }
@@ -390,13 +409,8 @@ impl Cache {
 
             println!("Starting up background updater for {}", distributor);
             let update_tx = update_tx.clone();
-            self.hydrate_cache_for_config(
-                gpa_config,
-                &rpc_client,
-                ws_url.clone(),
-                update_tx,
-            )
-            .await?;
+            self.hydrate_cache_for_config(gpa_config, rpc_url.clone(), ws_url.clone(), update_tx)
+                .await?;
         }
 
         let arc_self = Arc::new(self.clone());
