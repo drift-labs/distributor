@@ -1,5 +1,5 @@
 import { AnchorProvider, BN, Program, Wallet } from '@coral-xyz/anchor';
-import { ASSOCIATED_TOKEN_PROGRAM_ID, createAssociatedTokenAccountInstruction, getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { createAssociatedTokenAccountInstruction, getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Connection, PublicKey, SystemProgram, TransactionInstruction } from '@solana/web3.js';
 import { MerkleDistributor, IDL } from '../../target/types/merkle_distributor';
 
