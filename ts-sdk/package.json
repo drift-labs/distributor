@@ -22,7 +22,7 @@
   "license": "MIT",
   "dependencies": {
     "@coral-xyz/anchor": "^0.29.0",
-    "@solana/spl-token": "0.1.8",
+    "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "~1.87.6",
     "prettier": "^3.2.5",
     "ts-node": "^10.9.2"
