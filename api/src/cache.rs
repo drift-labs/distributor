@@ -119,7 +119,7 @@ impl Cache {
         update_tx: tokio::sync::mpsc::Sender<(String, DataAndSlot<ClaimStatus>)>,
     ) -> Result<(), ApiError> {
         let mut attempt = 0;
-        let mut unsubscribed = false;
+        let unsubscribed = false;
         let max_reconnection_attempts = 20;
         let base_delay = tokio::time::Duration::from_secs(5);
         let program_id = self.program_id.clone();
@@ -334,9 +334,12 @@ impl Cache {
                             // println!("Data is the same as what's in cache");
                             continue;
                         }
-                        if entry.get().slot <= data.slot {
+                        // Allow polling updates (slot 0) to override if data is different
+                        // This fixes the bug where WebSocket misses updates but polling catches them
+                        if entry.get().slot <= data.slot || (data.slot == 0 && entry.get().data != data.data) {
                             println!(
-                                "Updating cache with newer slot for claimant: {} ({}) on {} tree",
+                                "Updating cache with {} for claimant: {} ({}) on {} tree",
+                                if data.slot > 0 { "newer slot" } else { "polling data" },
                                 data.data.claimant.to_string(),
                                 pubkey,
                                 data.data.distributor.to_string()

@@ -57,7 +57,7 @@ pub fn process_create_merkle_tree(merkle_tree_args: &CreateMerkleTreeArgs) {
             .map(|x| CsvEntry {
                 pubkey: x,
                 amount: merkle_tree_args.amount,
-                locked_amount: 0,
+                locked_amount: Some(0),
             })
             .collect::<Vec<CsvEntry>>();
 
