@@ -227,8 +227,8 @@ impl Cache {
                     .await
                 {
                     Ok(accounts) => {
-                        let start_time = std::time::Instant::now();
-                        let total_accounts = accounts.len();
+                        // let start_time = std::time::Instant::now();
+                        // let total_accounts = accounts.len();
                         let tasks: Vec<_> = accounts
                             .into_iter()
                             .map(|(pubkey, account)| {
@@ -247,14 +247,16 @@ impl Cache {
                             .collect();
 
                         join_all(tasks).await;
-                        let total_duration = start_time.elapsed();
-                        println!(
-                            "Total deserialization time for {} ClaimStatus accounts: {:?}",
-                            total_accounts, total_duration
-                        );
+                        // let total_duration = start_time.elapsed();
+                        // println!(
+                        //     "Total deserialization time for {} ClaimStatus accounts: {:?}",
+                        //     total_accounts, total_duration
+                        // );
                     }
                     Err(e) => {
                         println!("Error in gpa_resp: {:?}", e);
+                        // Continue with next iteration instead of panicking
+                        // The websocket subscription will still provide updates
                     }
                 };
                 interval.tick().await;
@@ -284,37 +286,64 @@ impl Cache {
         let distributors_to_load = self.distributors.clone();
         let distributor_keys_vec = self.get_distributor_keys();
         let distributor_keys = distributor_keys_vec.as_slice();
-        match rpc_client
-            .get_multiple_accounts_with_commitment(&distributor_keys, CommitmentConfig::confirmed())
-            .await
-        {
-            Ok(accounts) => {
-                println!(
-                    "Hydrating distributor cache ({} accounts)",
-                    accounts.value.len()
-                );
-                for (index, account) in accounts.value.into_iter().enumerate() {
-                    let distributor = distributors_to_load.get(index).unwrap();
-                    match account {
-                        Some(account) => {
-                            let distributor_data =
-                                MerkleDistributor::try_deserialize(&mut account.data.as_slice())
-                                    .map_err(|err| ApiError::InternalError(Box::new(err)))
-                                    .unwrap();
-                            distributor_cache
-                                .insert(distributor.distributor_pubkey.clone(), distributor_data);
-                        }
-                        None => {
-                            println!(
-                                "Error in gma for distributor: {}",
-                                distributor.distributor_pubkey
-                            );
+        
+        // Retry logic for network errors
+        let mut retry_count = 0;
+        const MAX_RETRIES: u32 = 3;
+        const RETRY_DELAY: Duration = Duration::from_secs(2);
+        
+        loop {
+            match rpc_client
+                .get_multiple_accounts_with_commitment(&distributor_keys, CommitmentConfig::confirmed())
+                .await
+            {
+                Ok(accounts) => {
+                    println!(
+                        "Hydrating distributor cache ({} accounts)",
+                        accounts.value.len()
+                    );
+                    for (index, account) in accounts.value.into_iter().enumerate() {
+                        let distributor = distributors_to_load.get(index).unwrap();
+                        match account {
+                            Some(account) => {
+                                let distributor_data =
+                                    MerkleDistributor::try_deserialize(&mut account.data.as_slice())
+                                        .map_err(|err| ApiError::InternalError(Box::new(err)))
+                                        .unwrap();
+                                distributor_cache
+                                    .insert(distributor.distributor_pubkey.clone(), distributor_data);
+                            }
+                            None => {
+                                println!(
+                                    "Error in gma for distributor: {}",
+                                    distributor.distributor_pubkey
+                                );
+                            }
                         }
                     }
+                    break; // Success, exit retry loop
                 }
-            }
-            Err(e) => {
-                println!("Error in distributor gma: {:?}", e);
+                Err(e) => {
+                    retry_count += 1;
+                    println!("Error in distributor gma (attempt {}/{}): {:?}", retry_count, MAX_RETRIES, e);
+                    
+                    if retry_count >= MAX_RETRIES {
+                        println!("Max retries reached for distributor cache update. Skipping this cycle.");
+                        break;
+                    }
+                    
+                    // Check if it's a network error that's worth retrying
+                    let error_string = format!("{:?}", e);
+                    if error_string.contains("IncompleteMessage") || 
+                       error_string.contains("timeout") ||
+                       error_string.contains("connection") {
+                        println!("Retrying after {} seconds...", RETRY_DELAY.as_secs());
+                        tokio::time::sleep(RETRY_DELAY).await;
+                    } else {
+                        // Non-retriable error, exit
+                        break;
+                    }
+                }
             }
         }
     }
