@@ -105,10 +105,20 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let rpc_client = RpcClient::new(args.rpc_url.clone());
     info!("started rpc client at {}", args.rpc_url);
 
-    let mut paths: Vec<_> = fs::read_dir(&args.merkle_tree_path)
-        .unwrap()
-        .map(|r| r.unwrap())
-        .collect();
+    let mut paths: Vec<_> = match fs::read_dir(&args.merkle_tree_path) {
+        Ok(entries) => entries
+            .filter_map(|r| r.ok())
+            .collect(),
+        Err(e) => {
+            eprintln!(
+                "Warning: Could not read merkle tree directory '{}': {}",
+                args.merkle_tree_path.display(),
+                e
+            );
+            eprintln!("Server will start in no-op mode without merkle trees");
+            vec![]
+        }
+    };
     paths.sort_by_key(|dir| dir.path());
 
     let tree = Arc::new(Mutex::new(HashMap::new()));
@@ -187,27 +197,38 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let mut vested_users: Option<HashMap<String, u128>> = None;
     if let Some(vested_accounts_path) = args.unvested_accounts_path {
         let decimals = args.unvested_accounts_decimals.unwrap_or(6);
-        let vested_users_file = fs::File::open(vested_accounts_path)?;
-        let vested_users_reader = std::io::BufReader::new(vested_users_file);
-        let mut vested_users_csv = Reader::from_reader(vested_users_reader);
-        let mut vested_users_map = HashMap::new();
-        for record in vested_users_csv.records() {
-            let record = match record {
-                Ok(record) => record,
-                Err(e) => {
-                    eprintln!("Error parsing vested user record: {}", e);
-                    continue;
+        match fs::File::open(&vested_accounts_path) {
+            Ok(vested_users_file) => {
+                let vested_users_reader = std::io::BufReader::new(vested_users_file);
+                let mut vested_users_csv = Reader::from_reader(vested_users_reader);
+                let mut vested_users_map = HashMap::new();
+                for record in vested_users_csv.records() {
+                    let record = match record {
+                        Ok(record) => record,
+                        Err(e) => {
+                            eprintln!("Error parsing vested user record: {}", e);
+                            continue;
+                        }
+                    };
+                    let user_pubkey = &record[0].to_string();
+                    let vested_amount =
+                        ui_amount_to_token_amount(record[1].parse::<u128>().unwrap(), decimals);
+                    vested_users_map
+                        .entry(user_pubkey.to_string())
+                        .and_modify(|e| *e += vested_amount)
+                        .or_insert(vested_amount);
                 }
-            };
-            let user_pubkey = &record[0].to_string();
-            let vested_amount =
-                ui_amount_to_token_amount(record[1].parse::<u128>().unwrap(), decimals);
-            vested_users_map
-                .entry(user_pubkey.to_string())
-                .and_modify(|e| *e += vested_amount)
-                .or_insert(vested_amount);
+                vested_users = Some(vested_users_map);
+            }
+            Err(e) => {
+                eprintln!(
+                    "Warning: Could not open vested accounts file '{}': {}",
+                    vested_accounts_path.display(),
+                    e
+                );
+                eprintln!("Continuing without vested accounts data");
+            }
         }
-        vested_users = Some(vested_users_map);
     } else {
         println!("No vested accounts path provided");
     }

@@ -62,3 +62,4 @@ jobs:
           BRANCH_NAME: ${{ github.ref_name }}
         run: |
           kubectl rollout restart -n $BRANCH_NAME statefulset/master-airdrop-distributor
+          kubectl rollout restart -n $BRANCH_NAME statefulset/airdrop-distributor-fuel-1
