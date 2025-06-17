@@ -106,9 +106,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     info!("started rpc client at {}", args.rpc_url);
 
     let mut paths: Vec<_> = match fs::read_dir(&args.merkle_tree_path) {
-        Ok(entries) => entries
-            .filter_map(|r| r.ok())
-            .collect(),
+        Ok(entries) => entries.filter_map(|r| r.ok()).collect(),
         Err(e) => {
             eprintln!(
                 "Warning: Could not read merkle tree directory '{}': {}",

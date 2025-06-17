@@ -1,5 +1,5 @@
-use solana_sdk::compute_budget::ComputeBudgetInstruction;
 use crate::*;
+use solana_sdk::compute_budget::ComputeBudgetInstruction;
 
 pub fn process_new_distributor(args: &Args, new_distributor_args: &NewDistributorArgs) {
     let client = RpcClient::new_with_commitment(&args.rpc_url, CommitmentConfig::finalized());
@@ -75,6 +75,13 @@ pub fn process_new_distributor(args: &Args, new_distributor_args: &NewDistributo
                 ),
             );
         }
+        println!("clawback_receiver: ");
+        println!("keypair: {}", keypair.pubkey());
+        println!(
+            "keypair balance: {}",
+            client.get_balance(&keypair.pubkey()).unwrap()
+        );
+        println!("program payer: {}", program.payer());
         let clawback_receiver = get_or_create_ata(&program, args.mint, keypair.pubkey()).unwrap();
 
         ixs.push(Instruction {

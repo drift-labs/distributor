@@ -1,5 +1,5 @@
-use solana_sdk::compute_budget::ComputeBudgetInstruction;
 use crate::*;
+use solana_sdk::compute_budget::ComputeBudgetInstruction;
 
 pub fn process_fund_all(args: &Args, fund_all_args: &FundAllArgs) {
     let program = args.get_program_client();
@@ -16,6 +16,29 @@ pub fn process_fund_all(args: &Args, fund_all_args: &FundAllArgs) {
 
     for file in paths {
         let single_tree_path = file.path();
+
+        // Skip directories
+        if single_tree_path.is_dir() {
+            continue;
+        }
+
+        // Skip non-JSON files
+        match single_tree_path.extension() {
+            Some(ext) if ext == "json" => {
+                // Continue processing JSON files
+            }
+            Some(ext) => {
+                println!("skipping non-json file: {}", single_tree_path.display());
+                continue;
+            }
+            None => {
+                println!(
+                    "skipping file without extension: {}",
+                    single_tree_path.display()
+                );
+                continue;
+            }
+        }
 
         let merkle_tree =
             AirdropMerkleTree::new_from_file(&single_tree_path).expect("failed to read");
@@ -45,14 +68,17 @@ pub fn process_fund_all(args: &Args, fund_all_args: &FundAllArgs) {
             );
         }
 
-        ixs.push(spl_token::instruction::transfer(
-            &spl_token::id(),
-            &source_vault,
-            &token_vault,
-            &keypair.pubkey(),
-            &[],
-            merkle_tree.max_total_claim,
-        ).unwrap());
+        ixs.push(
+            spl_token::instruction::transfer(
+                &spl_token::id(),
+                &source_vault,
+                &token_vault,
+                &keypair.pubkey(),
+                &[],
+                merkle_tree.max_total_claim,
+            )
+            .unwrap(),
+        );
 
         let tx = Transaction::new_signed_with_payer(
             &ixs,

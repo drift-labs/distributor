@@ -1,5 +1,5 @@
-use solana_sdk::compute_budget::ComputeBudgetInstruction;
 use crate::*;
+use solana_sdk::compute_budget::ComputeBudgetInstruction;
 
 pub fn process_claim(args: &Args, claim_args: &ClaimArgs) {
     let keypair = read_keypair_file(&args.keypair_path.clone().unwrap())
@@ -62,12 +62,8 @@ pub fn process_claim(args: &Args, claim_args: &ClaimArgs) {
     ixs.push(claim_ix);
 
     let blockhash = client.get_latest_blockhash().unwrap();
-    let tx = Transaction::new_signed_with_payer(
-        &ixs,
-        Some(&claimant.key()),
-        &[&keypair],
-        blockhash,
-    );
+    let tx =
+        Transaction::new_signed_with_payer(&ixs, Some(&claimant.key()), &[&keypair], blockhash);
 
     let signature = client
         .send_and_confirm_transaction_with_spinner(&tx)

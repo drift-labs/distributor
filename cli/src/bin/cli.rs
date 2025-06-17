@@ -72,9 +72,9 @@ pub struct Args {
 
 impl Args {
     fn get_program_client(&self) -> Program<Rc<Keypair>> {
-        // let payer =
-        //     read_keypair_file(self.keypair_path.clone()).expect("Wallet keypair file not found");
-        let payer = Keypair::new();
+        let payer = read_keypair_file(self.keypair_path.clone().unwrap())
+            .expect("Wallet keypair file not found");
+        // let payer = Keypair::new();
         let client = AnchorClient::new_with_options(
             Cluster::Custom(self.rpc_url.clone(), self.rpc_url.clone()),
             Rc::new(Keypair::from_bytes(&payer.to_bytes()).unwrap()),
@@ -530,29 +530,43 @@ fn check_distributor_onchain_matches(
 
 fn get_pre_list() -> Vec<String> {
     let list = vec![
-        "DHLXnJdACTY83yKwnUkeoDjqi4QBbsYGa1v8tJL76ViX",
-        "BULRqL3U2jPgwvz6HYCyBVq9BMtK94Y1Nz98KQop23aD",
-        "7w32LzRsJrQiE7S3ZSdkz9TSFGey1XNsonPmdm9xDUch",
-        "55pPhcCcp8gEKvKWr1JUkAcdwMeemmNhTHmkWNR9sJib",
-        "62ucxc2gd5TBCwzToEEWVV4M5drVK7Fi7aYozniqWtac",
-        "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
-        "9zg3seAh4Er1Nz8GAuiciH437apxtzgUWBT8frhudevR",
-        "AjefJWRfjRCVNSQ1pHnTW8F7szLV7xFZftiB3yM5vnTa",
-        "8SEFruHjgNrnV8ak2Ff11wg9em8Nh72RWTwk359bRyzE",
-        "7jBypy9HX1dyLHPnmRnRubibNUaBPrShnERGnoE7rc3C",
-        "XWpxVfYTeKmmp18DPxqPvWFL7P1C2vbdegDPAbXkV1n",
-        "AuTFdqo4GsxpDgtag87pDaHE259cE94Z82kdpFozVBhC",
-        "6h43GsVT3TjtLa5nRpsXp15GDpAY4smWCYHgcq58dSPM",
-        "2mAax9cNqDXDg9eDJDby1tBh9Q8N3TS7qLhX9rMp8EVc",
-        "JBeYA7dmBGCNgaEdtqdoUnESwKJho5YvgXVNLgo4n3MM",
-        "HeTpE5BnNinzNv92MzVAGyVT5LjAwTWuk5qQcPURmi2L",
-        "Bidku3jkJUxiTzBJZroEfwPcUWueNUst9LrMbZQLhrtG",
-        "HUQytvb7WCCqbHnpQrVgXhmXSw4XfWMnmqCiKz6T1vsU",
-        "4zvTjdpyr3SAgLeSpCnq4KaHvX2j5SbkwxYydzbfqhRQ",
-        "EVfUfs9XNwJmfNvoazDbZVb6ecnGCxgQrJzsCQHoQ4q7",
-        "GMtwcuktJfrRcnyGktWW4Vab8cfjPcBy3xbuZgRegw6E",
-        "HAPdsaZFfQDG4bD8vzBbPCUawUWKSJxvhQ7TGg1BeAxZ",
+        // "DHLXnJdACTY83yKwnUkeoDjqi4QBbsYGa1v8tJL76ViX",
+        // "BULRqL3U2jPgwvz6HYCyBVq9BMtK94Y1Nz98KQop23aD",
+        // "7w32LzRsJrQiE7S3ZSdkz9TSFGey1XNsonPmdm9xDUch",
+        // "55pPhcCcp8gEKvKWr1JUkAcdwMeemmNhTHmkWNR9sJib",
+        // "62ucxc2gd5TBCwzToEEWVV4M5drVK7Fi7aYozniqWtac",
+        // "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+        // "9zg3seAh4Er1Nz8GAuiciH437apxtzgUWBT8frhudevR",
+        // "AjefJWRfjRCVNSQ1pHnTW8F7szLV7xFZftiB3yM5vnTa",
+        // "8SEFruHjgNrnV8ak2Ff11wg9em8Nh72RWTwk359bRyzE",
+        // "7jBypy9HX1dyLHPnmRnRubibNUaBPrShnERGnoE7rc3C",
+        // "XWpxVfYTeKmmp18DPxqPvWFL7P1C2vbdegDPAbXkV1n",
+        // "AuTFdqo4GsxpDgtag87pDaHE259cE94Z82kdpFozVBhC",
+        // "6h43GsVT3TjtLa5nRpsXp15GDpAY4smWCYHgcq58dSPM",
+        // "2mAax9cNqDXDg9eDJDby1tBh9Q8N3TS7qLhX9rMp8EVc",
+        // "JBeYA7dmBGCNgaEdtqdoUnESwKJho5YvgXVNLgo4n3MM",
+        // "HeTpE5BnNinzNv92MzVAGyVT5LjAwTWuk5qQcPURmi2L",
+        // "Bidku3jkJUxiTzBJZroEfwPcUWueNUst9LrMbZQLhrtG",
+        // "HUQytvb7WCCqbHnpQrVgXhmXSw4XfWMnmqCiKz6T1vsU",
+        // "4zvTjdpyr3SAgLeSpCnq4KaHvX2j5SbkwxYydzbfqhRQ",
+        // "EVfUfs9XNwJmfNvoazDbZVb6ecnGCxgQrJzsCQHoQ4q7",
+        // "GMtwcuktJfrRcnyGktWW4Vab8cfjPcBy3xbuZgRegw6E",
+        // "HAPdsaZFfQDG4bD8vzBbPCUawUWKSJxvhQ7TGg1BeAxZ",
+        "4FED9aSQhGfX43FrSUa6GgmNjBsy76GTe9UHig7r2nK6",
+        "6PAG5Le18uDrwkWWyuMFF3N3G74ksShVbUR5L7uDJtFR",
+        "HZ1g3FXyvDt4pC1p7mUFnA44UtPkXghGJUtoxw5TDi42",
+        "7gcjNCwGKhFsfDgHwH6Ja4pM2xBJj47hJpexxMFDyBpM",
+        "8LWr1b9bXN7vRAgSL1Gg8U36ZB7oHGDupRQYVcw4FiQ9",
+        "9qkVBGAgPzixW8Fky7sTjAoAv6ZAZEymVGvmYvqVwFmR",
+        "FtfVWjnft13vKCGHGj6QaZcHWP8GcvJKanXQY3JL3zd3",
+        "6gS27oW41tRD4GHW5QXe3vQN9SkC7TyFFQmtuRtJRT9Q",
+        "dRiaT3YueNdfkhRBkLnzE6TDf4b35uESgL3Boopzxj6",
+        "DRiL3JgMc8Hdxv6TBkxDcan9qEm2JoBhFiWViQxupPo",
+        "DriQrk2v2HsLigaqH2qJtpCQ3MrNLGvq8GTB6jtXC2F",
+        "DriEp7U5awPuc6p4ZM8gFWWxS79Go7VQstkKaMiGwJb",
+        "DriM2HACfSFeh5tHum2aRgfgFeRGy72qpbc4UsMkvLm",
     ];
+
     let list: Vec<String> = list.iter().map(|x| x.to_string()).collect();
     list
 }

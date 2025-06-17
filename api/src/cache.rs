@@ -286,15 +286,18 @@ impl Cache {
         let distributors_to_load = self.distributors.clone();
         let distributor_keys_vec = self.get_distributor_keys();
         let distributor_keys = distributor_keys_vec.as_slice();
-        
+
         // Retry logic for network errors
         let mut retry_count = 0;
         const MAX_RETRIES: u32 = 3;
         const RETRY_DELAY: Duration = Duration::from_secs(2);
-        
+
         loop {
             match rpc_client
-                .get_multiple_accounts_with_commitment(&distributor_keys, CommitmentConfig::confirmed())
+                .get_multiple_accounts_with_commitment(
+                    &distributor_keys,
+                    CommitmentConfig::confirmed(),
+                )
                 .await
             {
                 Ok(accounts) => {
@@ -306,12 +309,15 @@ impl Cache {
                         let distributor = distributors_to_load.get(index).unwrap();
                         match account {
                             Some(account) => {
-                                let distributor_data =
-                                    MerkleDistributor::try_deserialize(&mut account.data.as_slice())
-                                        .map_err(|err| ApiError::InternalError(Box::new(err)))
-                                        .unwrap();
-                                distributor_cache
-                                    .insert(distributor.distributor_pubkey.clone(), distributor_data);
+                                let distributor_data = MerkleDistributor::try_deserialize(
+                                    &mut account.data.as_slice(),
+                                )
+                                .map_err(|err| ApiError::InternalError(Box::new(err)))
+                                .unwrap();
+                                distributor_cache.insert(
+                                    distributor.distributor_pubkey.clone(),
+                                    distributor_data,
+                                );
                             }
                             None => {
                                 println!(
@@ -325,18 +331,22 @@ impl Cache {
                 }
                 Err(e) => {
                     retry_count += 1;
-                    println!("Error in distributor gma (attempt {}/{}): {:?}", retry_count, MAX_RETRIES, e);
-                    
+                    println!(
+                        "Error in distributor gma (attempt {}/{}): {:?}",
+                        retry_count, MAX_RETRIES, e
+                    );
+
                     if retry_count >= MAX_RETRIES {
                         println!("Max retries reached for distributor cache update. Skipping this cycle.");
                         break;
                     }
-                    
+
                     // Check if it's a network error that's worth retrying
                     let error_string = format!("{:?}", e);
-                    if error_string.contains("IncompleteMessage") || 
-                       error_string.contains("timeout") ||
-                       error_string.contains("connection") {
+                    if error_string.contains("IncompleteMessage")
+                        || error_string.contains("timeout")
+                        || error_string.contains("connection")
+                    {
                         println!("Retrying after {} seconds...", RETRY_DELAY.as_secs());
                         tokio::time::sleep(RETRY_DELAY).await;
                     } else {
@@ -365,10 +375,16 @@ impl Cache {
                         }
                         // Allow polling updates (slot 0) to override if data is different
                         // This fixes the bug where WebSocket misses updates but polling catches them
-                        if entry.get().slot <= data.slot || (data.slot == 0 && entry.get().data != data.data) {
+                        if entry.get().slot <= data.slot
+                            || (data.slot == 0 && entry.get().data != data.data)
+                        {
                             println!(
                                 "Updating cache with {} for claimant: {} ({}) on {} tree",
-                                if data.slot > 0 { "newer slot" } else { "polling data" },
+                                if data.slot > 0 {
+                                    "newer slot"
+                                } else {
+                                    "polling data"
+                                },
                                 data.data.claimant.to_string(),
                                 pubkey,
                                 data.data.distributor.to_string()
