@@ -39,6 +39,70 @@ use crate::{cache::Cache, error, error::ApiError, Result};
 const START_AMOUNT_PCT_PRECISION: u128 = 1_000;
 const START_AMOUNT_PCT_DENOM: u128 = 100 * START_AMOUNT_PCT_PRECISION;
 
+/// Calculate claimable amount for a user who hasn't called new_claim yet
+/// This mirrors the logic from ClaimStatus::update_unlocked_amount_claimed
+pub fn calculate_claimable_amount_for_new_user(
+    unlocked_amount: u64,
+    curr_ts: i64,
+    start_ts: i64,
+    end_ts: i64,
+    start_amount_pct: u128,
+) -> u64 {
+    if curr_ts < start_ts {
+        return 0;
+    }
+
+    if curr_ts >= end_ts {
+        return unlocked_amount;
+    }
+
+    // Calculate vested amount following the same logic as update_unlocked_amount_claimed
+    let time_into_unlock = (curr_ts - start_ts) as u128;
+    let total_unlock_time = (end_ts - start_ts) as u128;
+
+    if total_unlock_time == 0 {
+        return unlocked_amount;
+    }
+
+    // Start amount is based on start_amount_pct (typically 50%)
+    let start_amount_pct_num = start_amount_pct * START_AMOUNT_PCT_PRECISION;
+    let start_amount =
+        ((unlocked_amount as u128) * start_amount_pct_num / START_AMOUNT_PCT_DENOM) as u64;
+
+    // Calculate bonus amount (linear vesting of the remaining portion)
+    let bonus_amount =
+        (time_into_unlock * (unlocked_amount - start_amount) as u128 / total_unlock_time) as u64;
+
+    start_amount + bonus_amount
+}
+
+/// Calculate claimable amount for locked tokens (linear vesting, no start percentage)
+/// This mirrors the logic from ClaimStatus::unlocked_amount
+pub fn calculate_locked_amount_claimable(
+    locked_amount: u64,
+    curr_ts: i64,
+    start_ts: i64,
+    end_ts: i64,
+) -> u64 {
+    if curr_ts < start_ts {
+        return 0;
+    }
+
+    if curr_ts >= end_ts {
+        return locked_amount;
+    }
+
+    let time_into_unlock = (curr_ts - start_ts) as u128;
+    let total_unlock_time = (end_ts - start_ts) as u128;
+
+    if total_unlock_time == 0 {
+        return locked_amount;
+    }
+
+    // Linear vesting of the full locked amount
+    (time_into_unlock * locked_amount as u128 / total_unlock_time) as u64
+}
+
 pub struct RouterState {
     pub basic_auth_user: Option<String>,
     pub basic_auth_password: Option<String>,
@@ -254,7 +318,27 @@ async fn get_eligibility(
                     .unwrap_or(0),
             )
         })
-        .unwrap_or((0, 0, 0));
+        .unwrap_or_else(|| {
+            // No ClaimStatus exists - calculate what would be claimable
+            // For unlocked amounts (proof.amount), use vesting with 50% start
+            let unlocked_claimable = calculate_claimable_amount_for_new_user(
+                proof.amount as u64,
+                curr_ts,
+                start_ts,
+                end_ts,
+                state.start_amount_pct,
+            );
+
+            // For locked amounts, calculate linear vesting (no 50% start)
+            let locked_claimable = calculate_locked_amount_claimable(
+                proof.locked_amount as u64,
+                curr_ts,
+                start_ts,
+                end_ts,
+            );
+
+            (0, 0, unlocked_claimable + locked_claimable)
+        });
 
     let start_amount_pct_num = state.start_amount_pct * START_AMOUNT_PCT_PRECISION;
     let start_amount = (proof.amount as u128)
@@ -420,4 +504,84 @@ async fn get_distributors(State(state): State<Arc<RouterState>>) -> Result<impl 
 
 async fn root() -> impl IntoResponse {
     "hey what u doing here"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_claimable_amount_before_start() {
+        let amount = calculate_claimable_amount_for_new_user(1_000_000, 0, 10, 100, 50);
+        assert_eq!(amount, 0);
+    }
+
+    #[test]
+    fn test_calculate_claimable_amount_at_start() {
+        // At start time, should get 50% (start_amount_pct = 50)
+        let amount = calculate_claimable_amount_for_new_user(1_000_000, 10, 10, 100, 50);
+        assert_eq!(amount, 500_000);
+    }
+
+    #[test]
+    fn test_calculate_claimable_amount_halfway() {
+        // Halfway through vesting period
+        let amount = calculate_claimable_amount_for_new_user(1_000_000, 55, 10, 100, 50);
+        // 50% start + 25% of remaining 50% = 75%
+        assert_eq!(amount, 750_000);
+    }
+
+    #[test]
+    fn test_calculate_claimable_amount_at_end() {
+        // At end time, should get 100%
+        let amount = calculate_claimable_amount_for_new_user(1_000_000, 100, 10, 100, 50);
+        assert_eq!(amount, 1_000_000);
+    }
+
+    #[test]
+    fn test_calculate_claimable_amount_after_end() {
+        // After end time, should still get 100%
+        let amount = calculate_claimable_amount_for_new_user(1_000_000, 200, 10, 100, 50);
+        assert_eq!(amount, 1_000_000);
+    }
+
+    #[test]
+    fn test_calculate_claimable_amount_zero_duration() {
+        // Edge case: start_ts == end_ts
+        let amount = calculate_claimable_amount_for_new_user(1_000_000, 10, 10, 10, 50);
+        assert_eq!(amount, 1_000_000);
+    }
+
+    #[test]
+    fn test_calculate_locked_amount_claimable() {
+        // Test linear vesting for locked amounts
+        let amount = calculate_locked_amount_claimable(1_000_000, 0, 10, 100);
+        assert_eq!(amount, 0);
+
+        let amount = calculate_locked_amount_claimable(1_000_000, 10, 10, 100);
+        assert_eq!(amount, 0); // At start, 0% vested
+
+        let amount = calculate_locked_amount_claimable(1_000_000, 55, 10, 100);
+        assert_eq!(amount, 500_000); // Halfway through, 50% vested
+
+        let amount = calculate_locked_amount_claimable(1_000_000, 100, 10, 100);
+        assert_eq!(amount, 1_000_000); // At end, 100% vested
+    }
+
+    #[test]
+    fn test_user_case_locked_amount() {
+        // Test the specific case from the user
+        // locked_amount: 750000000
+        // start_ts: 1723809600
+        // end_ts: 1747396800
+        // current_ts: past end_ts
+
+        let locked_amount = 750000000;
+        let start_ts = 1723809600;
+        let end_ts = 1747396800;
+        let curr_ts = 1750149143; // Past end time
+
+        let claimable = calculate_locked_amount_claimable(locked_amount, curr_ts, start_ts, end_ts);
+        assert_eq!(claimable, 750000000); // Should be fully vested
+    }
 }
