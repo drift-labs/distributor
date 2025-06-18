@@ -361,6 +361,7 @@ async fn get_eligibility(
             err
         })?;
 
+    let unvested_amount = state.cache.get_unvested_amount(user_pubkey.clone());
     Ok(Json(EligibilityResp {
         claimant: user_pubkey.clone(),
         merkle_tree: proof.merkle_tree,
@@ -370,9 +371,13 @@ async fn get_eligibility(
         proof: proof.proof,
         start_amount,
         end_amount: proof.amount as u128,
-        locked_amount: proof.locked_amount as u128,
+        locked_amount: if proof.locked_amount as u128 > 0 {
+            proof.locked_amount as u128
+        } else {
+            unvested_amount
+        },
         claimable_amount: claimable_amount as u128,
-        unvested_amount: state.cache.get_unvested_amount(user_pubkey),
+        unvested_amount,
         claimed_amount: (unlocked_amount_claimed + locked_amount_withdrawn) as u128,
         unlocked_amount_claimed: unlocked_amount_claimed as u128,
         locked_amount_withdrawn: locked_amount_withdrawn as u128,
