@@ -124,6 +124,9 @@ pub enum Commands {
     TotalClaim(TotalClaimAgrs),
 
     SetClawbackReceiver(ClawbackReceiverArgs),
+
+    /// Iteratively find airdrop version (PDA that don't exist yet)
+    FindAirdropVersion(FindAirdropVersionArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -175,6 +178,13 @@ pub struct VerifyArgs {
     pub closable: bool,
     #[clap(long, env)]
     pub skip_verify_amount: bool,
+}
+
+// NewDistributor subcommand args
+#[derive(Parser, Debug)]
+pub struct FindAirdropVersionArgs {
+    #[clap(long, env)]
+    pub start_airdrop_version: Option<u64>,
 }
 
 // NewDistributor subcommand args
@@ -236,6 +246,10 @@ pub struct CreateMerkleTreeArgs {
     pub amount: u64,
     #[clap(long, env)]
     pub decimals: u32,
+    
+    /// Optional starting airdrop version. If not provided, will auto-detect next available version
+    #[clap(long, env)]
+    pub start_airdrop_version: Option<u64>,
 }
 
 #[derive(Parser, Debug)]
@@ -423,7 +437,7 @@ fn main() {
         }
         Commands::Clawback(clawback_args) => process_clawback(&args, clawback_args),
         Commands::CreateMerkleTree(merkle_tree_args) => {
-            process_create_merkle_tree(merkle_tree_args);
+            process_create_merkle_tree(&args, merkle_tree_args);
         }
         Commands::SetAdmin(set_admin_args) => {
             process_set_admin(&args, set_admin_args);
@@ -472,6 +486,9 @@ fn main() {
 
         Commands::SetClawbackReceiver(set_clawback_receiver_argrs) => {
             process_set_clawback_receiver(&args, set_clawback_receiver_argrs)
+        }
+        Commands::FindAirdropVersion(find_airdrop_version_args) => {
+            process_find_airdrop_version(&args, find_airdrop_version_args);
         }
     }
 }
