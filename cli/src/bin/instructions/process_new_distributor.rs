@@ -18,8 +18,16 @@ pub fn process_new_distributor(args: &Args, new_distributor_args: &NewDistributo
     for file in paths {
         let single_tree_path = file.path();
 
-        let merkle_tree =
-            AirdropMerkleTree::new_from_file(&single_tree_path).expect("failed to read");
+        let merkle_tree = match AirdropMerkleTree::new_from_file(&single_tree_path) {
+            Ok(tree) => tree,
+            Err(e) => {
+                println!(
+                    "Skipping file {:?} - failed to read: {:?}",
+                    single_tree_path, e
+                );
+                continue;
+            }
+        };
 
         if new_distributor_args.airdrop_version.is_some() {
             let airdrop_version = new_distributor_args.airdrop_version.unwrap();

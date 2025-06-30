@@ -64,3 +64,5 @@ jobs:
           kubectl rollout restart -n  $BRANCH_NAME statefulset/airdrop-distributor
           kubectl rollout restart -n  $BRANCH_NAME statefulset/airdrop-distributor-2
           kubectl rollout restart -n  $BRANCH_NAME statefulset/airdrop-distributor-3
+          kubectl rollout restart -n  $BRANCH_NAME statefulset/airdrop-fuel-1
+          kubectl rollout restart -n  $BRANCH_NAME statefulset/airdrop-fuel-1-locked
