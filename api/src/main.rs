@@ -170,17 +170,13 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     max_total_claim: single_tree.max_total_claim,
                 });
                 for node in single_tree.tree_nodes.iter() {
-                    let tree_has = tree_clone
-                        .lock()
-                        .await
-                        .contains_key(&node.claimant);
-                    if tree_has && node.claimant == Pubkey::from_str("FJWKx31QCW7yCwsVBihqx9QH5FzexbkpHgaaGrj8cbi5").unwrap() {
-                        let placeholder = Pubkey::from_str("BUZn6J1R6FEKNMptvKVmYiyn4U4cvxBRswBfeKBMKMm1").unwrap();
-                        println!("user was in tree already, insert the second claim in tree {}, amt: {}, ph: {}", single_tree.airdrop_version, node.amount, placeholder);
-                        tree_clone
-                            .lock()
-                            .await
-                            .insert(placeholder, (distributor_pubkey, node.clone()));
+                    if node.claimant == Pubkey::from_str("FJWKx31QCW7yCwsVBihqx9QH5FzexbkpHgaaGrj8cbi5").unwrap() {
+                        if node.amount == 5000000000 {
+                            tree_clone
+                                .lock()
+                                .await
+                                .insert(node.claimant, (distributor_pubkey, node.clone()));
+                        }
                     } else {
                         tree_clone
                             .lock()
