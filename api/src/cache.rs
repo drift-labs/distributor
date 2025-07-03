@@ -367,6 +367,14 @@ impl Cache {
         let cache_clone = Arc::clone(&self.claim_status_cache);
         tokio::spawn(async move {
             while let Some((pubkey, data)) = update_rx.recv().await {
+                if data.data.claimant.to_string()  == "FJWKx31QCW7yCwsVBihqx9QH5FzexbkpHgaaGrj8cbi5" {
+                    if data.data.unlocked_amount == 5000000000 {
+                        println!("skipping update for claimant: {} with amount: {}", data.data.claimant.to_string(), data.data.unlocked_amount);
+                    } else {
+                        println!("skipping update for claimant: {} with amount: {}", data.data.claimant.to_string(), data.data.unlocked_amount);
+                        continue;
+                    }
+                }
                 match cache_clone.entry(data.data.claimant.to_string()) {
                     Entry::Occupied(mut entry) => {
                         if entry.get().data == data.data {
