@@ -1,5 +1,5 @@
 import { AnchorProvider, BN, Program, Wallet } from '@coral-xyz/anchor';
-import { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { createAssociatedTokenAccountInstruction, getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Connection, PublicKey, SystemProgram, TransactionInstruction } from '@solana/web3.js';
 import { MerkleDistributor, IDL } from '../../target/types/merkle_distributor';
 
@@ -69,22 +69,18 @@ export const getOrCreateATAInstruction = async (
 ): Promise<[PublicKey, TransactionInstruction?]> => {
   let toAccount;
   try {
-    toAccount = await Token.getAssociatedTokenAddress(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
+    toAccount = await getAssociatedTokenAddress(
       tokenMint,
       owner,
       allowOwnerOffCurve,
     );
     const account = await connection.getAccountInfo(toAccount);
     if (!account) {
-      const ix = Token.createAssociatedTokenAccountInstruction(
-        ASSOCIATED_TOKEN_PROGRAM_ID,
-        TOKEN_PROGRAM_ID,
-        tokenMint,
+      const ix = createAssociatedTokenAccountInstruction(
+        payer,
         toAccount,
         owner,
-        payer,
+        tokenMint,
       );
       return [toAccount, ix];
     }
